@@ -1,0 +1,177 @@
+WebGPU Report  
+
+#1 high-performance  
+=====================  
+
+adapter info:  
+---------------  
+* architecture:     
+d-series  
+* description  
+* device  
+* isFallbackAdapter:  
+false  
+* subgroupMaxSize:  
+128  
+* subgroupMinSize:  
+4  
+* vendor:           
+img-tec  
+
+limits: 
+-------------------------------  
+* maxBindGroups:                            
+4  
+* maxBindGroupsPlusVertexBuffers:           
+24  
+* maxBindingsPerBindGroup:                  
+1000  
+* maxBufferSize:                            
+2147483648 (2gb)  
+* maxColorAttachmentBytesPerSample:         
+128b  
+* maxColorAttachments:                      
+8  
+* maxComputeInvocationsPerWorkgroup:        
+1k  
+* maxComputeWorkgroupSizeX:                 
+1k  
+* maxComputeWorkgroupSizeY:                 
+1k  
+* maxComputeWorkgroupSizeZ:                 
+64  
+* maxComputeWorkgroupStorageSize:           
+32768 (32k)  
+* maxComputeWorkgroupsPerDimension:         
+65535 (64k)  
+* maxDynamicStorageBuffersPerPipelineLayout:  
+8
+* maxDynamicUniformBuffersPerPipelineLayout:  
+10  
+* maxInterStageShaderVariables:             
+28  
+* maxSampledTexturesPerShaderStage:         
+16  
+* maxSamplersPerShaderStage:                
+16  
+* maxStorageBufferBindingSize:              
+134217728 (128mb)  
+* maxStorageBuffersInFragmentStage:         
+**MISSING**  
+* maxStorageBuffersInVertexStage:           
+**MISSING**  
+* maxStorageBuffersPerShaderStage:          
+10  
+* maxStorageTexturesInFragmentStage:        
+**MISSING**  
+* maxStorageTexturesInVertexStage:          
+**MISSING**  
+* maxStorageTexturesPerShaderStage:         
+8  
+* maxTextureArrayLayers:                    
+2048 (2k)  
+* maxTextureDimension1D:                    
+16384 (16k)  
+* maxTextureDimension2D:                    
+16384 (16k)  
+* maxTextureDimension3D:                    
+2048 (2k)  
+* maxUniformBufferBindingSize:              
+65536 (64k)  
+* maxUniformBuffersPerShaderStage:          
+12  
+* maxVertexAttributes:                      
+16  
+* maxVertexBufferArrayStride:               
+2048 (2k)  
+* maxVertexBuffers:                         
+8  
+* minStorageBufferOffsetAlignment:          
+256b  
+* minUniformBufferOffsetAlignment:          
+256b  
+
+features: 
+---------------------------------  
+* clip-distances  
+* core-features-and-limits  
+* depth-clip-control  
+* depth32float-stencil8  
+* dual-source-blending  
+* float32-blendable  
+* indirect-first-instance  
+* primitive-index  
+* rg11b10ufloat-renderable  
+* shader-f16  
+* subgroups  
+* texture-component-swizzle  
+* texture-compression-astc  
+* texture-compression-etc2  
+* texture-formats-tier1  
+* texture-formats-tier2  
+* timestamp-query  
+
+WGSL language features:  
+-------------------------  
+* packed_4x8_integer_dot_product  
+* pointer_composite_access  
+* readonly_and_readwrite_storage_textures  
+* subgroup_id  
+* subgroup_uniformity  
+* uniform_buffer_standard_layout  
+* unrestricted_pointer_parameters  
+
+warnings:  
+-----------  
+* immediates not supported  
+
+misc:  
+-------  
+* HDR canvas support:      
+supported  
+* WebXR support:           
+not supported  
+* fallback adapter:        
+not supported  
+* getPreferredCanvasFormat:  
+rgba8unorm  
+
+dedicated workers:  
+====================  
+* webgpu API:                
+exists  
+* requestAdapter:            
+successful  
+* requestDevice:             
+successful  
+* getContext("webgpu"):      
+successful  
+* requestAnimationFrame:     
+successful  
+* transferControlToOffscreen:  
+successful  
+* OffscreenCanvas:           
+successful  
+* CanvasRenderingContext2D:  
+successful  
+
+shared workers:  
+=================  
+* not yet implemented by this browser  
+
+service workers:  
+==================  
+* webgpu API:                
+exists  
+* requestAdapter:            
+successful  
+* requestDevice:             
+successful  
+* getContext("webgpu"):      
+successful  
+* transferControlToOffscreen:  
+successful  
+* OffscreenCanvas:           
+successful  
+* CanvasRenderingContext2D:  
+successful

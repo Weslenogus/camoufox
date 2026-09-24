@@ -150,5 +150,14 @@
   { "property": "automation:hideStackFrames", "type": "bool" },
   { "property": "mediaCapabilities:maxWidth", "type": "uint" },
   { "property": "mediaCapabilities:maxHeight", "type": "uint" },
-  { "property": "mediaCapabilities:maxFramerate", "type": "double" }
+  { "property": "mediaCapabilities:maxFramerate", "type": "double" },
+  { "property": "webGpu:vendor", "type": "str" },
+  { "property": "webGpu:architecture", "type": "str" },
+  { "property": "webGpu:device", "type": "str" },
+  { "property": "webGpu:description", "type": "str" },
+  { "property": "webGpu:subgroupMinSize", "type": "uint" },
+  { "property": "webGpu:subgroupMaxSize", "type": "uint" },
+  { "property": "webGpu:isFallbackAdapter", "type": "bool" },
+  { "property": "webGpu:features", "type": "array" },
+  { "property": "webGpu:limits", "type": "dict" }
 ]

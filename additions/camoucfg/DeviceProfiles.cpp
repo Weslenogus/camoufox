@@ -146,6 +146,62 @@ static nlohmann::json Pixel10() {
       {"35724", "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"},
   };
 
+  // WebGPU as Chrome reports it on the Pixel 10 (a real device's WebGPU
+  // report: PowerVR "img-tec" / "d-series", Vulkan backend).
+  p["webGpu:vendor"] = "img-tec";
+  p["webGpu:architecture"] = "d-series";
+  p["webGpu:device"] = "";
+  p["webGpu:description"] = "";
+  p["webGpu:subgroupMinSize"] = 4;
+  p["webGpu:subgroupMaxSize"] = 128;
+  p["webGpu:isFallbackAdapter"] = false;
+  p["webGpu:features"] = nlohmann::json::array({
+      "clip-distances", "core-features-and-limits", "depth-clip-control",
+      "depth32float-stencil8", "dual-source-blending", "float32-blendable",
+      "indirect-first-instance", "primitive-index",
+      "rg11b10ufloat-renderable", "shader-f16", "subgroups",
+      "texture-component-swizzle", "texture-compression-astc",
+      "texture-compression-etc2", "texture-formats-tier1",
+      "texture-formats-tier2", "timestamp-query",
+  });
+  p["webGpu:limits"] = {
+      {"maxTextureDimension1D", 16384},
+      {"maxTextureDimension2D", 16384},
+      {"maxTextureDimension3D", 2048},
+      {"maxTextureArrayLayers", 2048},
+      {"maxBindGroups", 4},
+      {"maxBindGroupsPlusVertexBuffers", 24},
+      {"maxBindingsPerBindGroup", 1000},
+      {"maxDynamicUniformBuffersPerPipelineLayout", 10},
+      {"maxDynamicStorageBuffersPerPipelineLayout", 8},
+      {"maxSampledTexturesPerShaderStage", 16},
+      {"maxSamplersPerShaderStage", 16},
+      {"maxStorageBuffersInVertexStage", 10},
+      {"maxStorageBuffersInFragmentStage", 10},
+      {"maxStorageBuffersPerShaderStage", 10},
+      {"maxStorageTexturesInVertexStage", 8},
+      {"maxStorageTexturesInFragmentStage", 8},
+      {"maxStorageTexturesPerShaderStage", 8},
+      {"maxUniformBuffersPerShaderStage", 12},
+      {"maxUniformBufferBindingSize", 65536},
+      {"maxStorageBufferBindingSize", 134217728},
+      {"minUniformBufferOffsetAlignment", 256},
+      {"minStorageBufferOffsetAlignment", 256},
+      {"maxVertexBuffers", 8},
+      {"maxBufferSize", 2147483648ULL},
+      {"maxVertexAttributes", 16},
+      {"maxVertexBufferArrayStride", 2048},
+      {"maxInterStageShaderVariables", 28},
+      {"maxColorAttachments", 8},
+      {"maxColorAttachmentBytesPerSample", 128},
+      {"maxComputeWorkgroupStorageSize", 32768},
+      {"maxComputeInvocationsPerWorkgroup", 1024},
+      {"maxComputeWorkgroupSizeX", 1024},
+      {"maxComputeWorkgroupSizeY", 1024},
+      {"maxComputeWorkgroupSizeZ", 64},
+      {"maxComputeWorkgroupsPerDimension", 65535},
+  };
+
   // Capture devices, as Chrome enumerates them on a Pixel: the Camera2
   // devices in descending id order (front first), each with its capture
   // formats and Image Capture controls. Sizes are the sensors' largest
@@ -234,6 +290,11 @@ static nlohmann::json Pixel10() {
       {"font.name.monospace.x-cyrillic", "Droid Sans Mono"},
       {"font.name.monospace.el", "Droid Sans Mono"},
       {"font.name-list.emoji", "Noto Color Emoji"},
+      // WebGPU ships in Chrome on Android, in windows and every worker; a
+      // phone always has it, so the host's GPU blocklist is not consulted.
+      {"dom.webgpu.enabled", true},
+      {"dom.webgpu.service-workers.enabled", true},
+      {"gfx.webgpu.ignore-blocklist", true},
   };
   // Only Android's fonts are visible: desktop families (Arial, Helvetica,
   // DejaVu...) and Apple's -apple-system / BlinkMacSystemFont do not resolve.

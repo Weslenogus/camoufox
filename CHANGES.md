@@ -431,3 +431,27 @@ Gecko's own answer.
 - `settings/camoucfg.jvv`: L372-375
 - `settings/properties.json`: L150-153
 - `tests/patches/android-media-capabilities.py`: new file, L1-80
+
+## Task 17 - WebGPU adapter
+
+`navigator.gpu` in windows and workers (via `device:prefs`), with the Pixel
+10's adapter as Chrome reports it, from a real device's WebGPU report
+(`tests/patches/assets/pixel10-webgpu-report.txt`): `adapter.info` vendor
+"img-tec", architecture "d-series" (`webGpu:vendor`, `architecture`, `device`,
+`description`, subgroup sizes, `isFallbackAdapter`), the phone's feature list
+(`webGpu:features`: ASTC and ETC2, no BC) and limits (`webGpu:limits`), and
+`getPreferredCanvasFormat()` "rgba8unorm" as on Android. Gecko otherwise
+reports empty adapter info and the host GPU's features and limits. Adapter
+selection ignores `powerPreference`: there is one GPU.
+
+- `patches/android/android-17-webgpu.patch` (patch; lines in the patched source tree):
+  - `dom/webgpu/Adapter.cpp`: L15, L26-49, L63-65, L89-91, L103-105, L296-365, L441-455
+  - `dom/webgpu/Adapter.h`: L60-65
+  - `dom/webgpu/Instance.cpp`: L7-8, L32-36
+  - `dom/webgpu/Instance.h`: L65-67, L75-76
+  - `dom/webgpu/moz.build`: L121-123
+- `additions/camoucfg/DeviceProfiles.cpp`: L149-204, L293-297
+- `settings/camoucfg.jvv`: L375-387
+- `settings/properties.json`: L153-162
+- `tests/patches/android-webgpu.py`: new file, L1-99
+- `tests/patches/assets/pixel10-webgpu-report.txt`: new file, L1-177
