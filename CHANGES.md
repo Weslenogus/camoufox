@@ -235,3 +235,27 @@ formats in COMPRESSED_TEXTURE_FORMATS, and correctly sized uploads succeed
 - `settings/camoucfg.jvv`: L343-345
 - `settings/properties.json`: L136-138
 - `tests/patches/android-webgl.py`: new file, L1-125
+
+## Task 8 - Fingertip touch input
+
+Touch input with a fingertip's geometry. Each new contact gets radiusX in
+[18, 31], radiusY within 3 of it, rotationAngle in [0, 27] and force in
+[0.38, 0.80] (`touch:*` ranges), stable for the whole gesture; its
+PointerEvents report width/height equal to the contact's diameter and
+pointerType "touch". Synthesized mouse input reaches the page as a finger too
+(pointerType "touch", a fingertip's size, a finger's pressure while pressed),
+and the click still lands. The input media features are a phone's:
+`(pointer: coarse)`, `(hover: none)` and the same for any-pointer/any-hover;
+the legacy touch APIs Android has are enabled through `device:prefs`.
+
+- `patches/android/android-08-touch.patch` (patch; lines in the patched source tree):
+  - `dom/base/nsContentUtils.cpp`: L10022-10039, L10042
+  - `dom/events/PointerEvent.cpp`: L15, L237-242
+  - `dom/events/PointerEventHandler.cpp`: L26-27, L982-985, L1001-1016, L1059-1065
+  - `dom/events/Touch.cpp`: L7-13, L237-338
+  - `dom/events/Touch.h`: L75-88
+  - `layout/style/nsMediaFeatures.cpp`: L444-450
+- `additions/camoucfg/DeviceProfiles.cpp`: L137-139
+- `settings/camoucfg.jvv`: L345-349
+- `settings/properties.json`: L138-142
+- `tests/patches/android-touch.py`: new file, L1-150

@@ -135,5 +135,9 @@
   { "property": "sensors:accelSigma", "type": "double" },
   { "property": "sensors:gyroSigma", "type": "double" },
   { "property": "webGl:emulateAstc", "type": "bool" },
-  { "property": "webGl:astcProfiles", "type": "array" }
+  { "property": "webGl:astcProfiles", "type": "array" },
+  { "property": "touch:radiusRange", "type": "array" },
+  { "property": "touch:radiusYDelta", "type": "double" },
+  { "property": "touch:rotationRange", "type": "array" },
+  { "property": "touch:forceRange", "type": "array" }
 ]

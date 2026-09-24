@@ -1,0 +1,288 @@
+diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
+index 23c52ffea1..16b7a2625c 100644
+--- a/dom/base/nsContentUtils.cpp
++++ b/dom/base/nsContentUtils.cpp
+@@ -10019,10 +10019,27 @@ mozilla::Result<bool, nsresult> nsContentUtils::SynthesizeTouchEvent(
+     float pressure = aTouches[i].mPressure.WasPassed()
+                          ? aTouches[i].mPressure.Value()
+                          : (msg == eTouchEnd ? 0.0f : 0.5f);
++    float rotationAngle = aTouches[i].mRotationAngle;
++
++    // Camoufox: on an emulated Android device, a touch whose geometry was left
++    // at its defaults -- a 1px point, no rotation, which is what automation
++    // sends -- becomes a fingertip (see Touch::FingerFor). Geometry a caller
++    // chose explicitly is kept as given.
++    const int32_t identifier =
++        CheckedInt<int32_t>(aTouches[i].mIdentifier).value();
++    if (Touch::EmulatesFingers() && aTouches[i].mRadiiX == 1 &&
++        aTouches[i].mRadiiY == 1 && aTouches[i].mRotationAngle == 0) {
++      const Touch::EmulatedFinger finger =
++          Touch::FingerFor(identifier, msg == eTouchStart);
++      radius = LayoutDeviceIntPoint::FromAppUnitsRounded(
++          CSSPoint::ToAppUnits(CSSPoint(finger.mRadiusX, finger.mRadiusY)),
++          aPresContext->AppUnitsPerDevPixel());
++      rotationAngle = finger.mRotationAngle;
++      pressure = finger.mForce;
++    }
+ 
+     RefPtr<Touch> t =
+-        new Touch(CheckedInt<int32_t>(aTouches[i].mIdentifier).value(), pt,
+-                  radius, aTouches[i].mRotationAngle, pressure);
++        new Touch(identifier, pt, radius, rotationAngle, pressure);
+     if (aTouches[i].mAltitudeAngle.WasPassed()) {
+       MOZ_ASSERT(aTouches[i].mAzimuthAngle.WasPassed());
+       t->mAngle.emplace(aTouches[i].mAltitudeAngle.Value(),
+diff --git a/dom/events/PointerEvent.cpp b/dom/events/PointerEvent.cpp
+index 37a8875d71..249f3a7b4f 100644
+--- a/dom/events/PointerEvent.cpp
++++ b/dom/events/PointerEvent.cpp
+@@ -12,6 +12,7 @@
+ #include "mozilla/dom/MouseEventBinding.h"
+ #include "mozilla/dom/PointerEventBinding.h"
+ #include "mozilla/dom/PointerEventHandler.h"
++#include "mozilla/dom/Touch.h"
+ #include "nsContentUtils.h"
+ #include "prtime.h"
+ 
+@@ -233,6 +234,12 @@ NS_IMPL_RELEASE_INHERITED(PointerEvent, MouseEvent)
+ 
+ uint16_t PointerEvent::ResistantInputSource(CallerType aCallerType) const {
+   const uint16_t inputSource = mEvent->AsPointerEvent()->mInputSource;
++  // Camoufox: see PointerEventHandler::InitPointerEventFromMouse.
++  if (Touch::EmulatesFingers() && mEvent->mFlags.mIsSynthesizedForTests &&
++      inputSource != MouseEvent_Binding::MOZ_SOURCE_TOUCH &&
++      inputSource != MouseEvent_Binding::MOZ_SOURCE_PEN) {
++    return MouseEvent_Binding::MOZ_SOURCE_TOUCH;
++  }
+   if (!ShouldResistFingerprinting(aCallerType)) {
+     return inputSource;
+   }
+diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
+index 681a9e1bac..918f8ef045 100644
+--- a/dom/events/PointerEventHandler.cpp
++++ b/dom/events/PointerEventHandler.cpp
+@@ -23,6 +23,8 @@
+ #include "nsRFPService.h"
+ #include "nsUserCharacteristics.h"
+ 
++#include "mozilla/dom/Touch.h"
++
+ namespace mozilla {
+ // MouseLocation logs the mouse location and when/where enqueued synthesized
+ // mouse move is flushed.  If you don't need all mouse location recording at
+@@ -977,6 +979,10 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
+   pointerInfo->mPreventMouseEventByContent = true;
+ }
+ 
++// Camoufox: the contact id the emulated finger behind synthesized mouse input
++// is tracked under; touch identifiers are small non-negative integers.
++static constexpr int32_t kEmulatedFingerForMouse = -1;
++
+ /* static */
+ void PointerEventHandler::InitPointerEventFromMouse(
+     WidgetPointerEvent* aPointerEvent, const WidgetMouseEvent* aMouseEvent,
+@@ -992,6 +998,22 @@ void PointerEventHandler::InitPointerEventFromMouse(
+ 
+   aPointerEvent->mButtons = aMouseEvent->mButtons;
+   aPointerEvent->mPressure = aMouseEvent->ComputeMouseButtonPressure();
++
++  // Camoufox: an emulated Android device has no mouse. Mouse input that
++  // automation synthesizes reaches the page as a finger: pointerType "touch"
++  // (PointerEvent::ResistantInputSource) with a fingertip's contact size and
++  // pressure. Only what the page reads changes; the event's own input source
++  // stays the mouse, so Gecko's pointer bookkeeping is untouched.
++  if (Touch::EmulatesFingers() && aMouseEvent->mFlags.mIsSynthesizedForTests &&
++      aMouseEvent->mInputSource != MouseEvent_Binding::MOZ_SOURCE_TOUCH) {
++    const Touch::EmulatedFinger finger = Touch::FingerFor(
++        kEmulatedFingerForMouse, aMessage == ePointerDown);
++    aPointerEvent->mWidth = 2.0 * finger.mRadiusX;
++    aPointerEvent->mHeight = 2.0 * finger.mRadiusY;
++    if (aPointerEvent->mButtons) {
++      aPointerEvent->mPressure = finger.mForce;
++    }
++  }
+ }
+ 
+ /* static */
+@@ -1034,6 +1056,13 @@ void PointerEventHandler::InitPointerEventFromTouch(
+   aPointerEvent.mInputSource = aTouchEvent.mInputSource;
+   aPointerEvent.mFromTouchEvent = true;
+   aPointerEvent.mPressure = aTouch.mForce;
++
++  // Camoufox: PointerEvent.width/height are the contact's extent -- twice the
++  // touch radius -- as Chrome reports them. Firefox reports the radius.
++  if (Touch::EmulatesFingers()) {
++    aPointerEvent.mWidth = 2.0 * aTouch.RadiusX(CallerType::System);
++    aPointerEvent.mHeight = 2.0 * aTouch.RadiusY(CallerType::System);
++  }
+ }
+ 
+ /* static */
+diff --git a/dom/events/Touch.cpp b/dom/events/Touch.cpp
+index 6a62bd704f..fa6f6fcaa8 100644
+--- a/dom/events/Touch.cpp
++++ b/dom/events/Touch.cpp
+@@ -4,6 +4,13 @@
+ 
+ #include "mozilla/dom/Touch.h"
+ 
++#include <algorithm>
++
++#include "MaskConfig.hpp"
++#include "mozilla/RandomNum.h"
++#include "mozilla/XorShift128PlusRNG.h"
++#include "nsTHashMap.h"
++
+ #include "mozilla/dom/EventTarget.h"
+ #include "mozilla/dom/TouchEvent.h"
+ #include "nsContentUtils.h"
+@@ -227,4 +234,106 @@ nsIGlobalObject* Touch::GetParentObject() const {
+   return mOriginalTarget->GetRelevantGlobal();
+ }
+ 
++// ---------------------------------------------------------------------------
++// Camoufox: fingertips for synthesized input on an emulated Android device.
++//
++// Automation synthesizes touches as 1px points with no rotation, and pointer
++// events from synthesized mouse input have no contact geometry at all. A phone
++// only ever sees fingertips: an elliptical contact 36-62 CSS px across, tilted
++// a little, pressed with real force. Each new contact draws its own finger
++// from the configured ranges --
++//
++//   "touch:radiusRange"     radiusX, CSS px             default [18, 31]
++//   "touch:radiusYDelta"    radiusY = radiusX +/- this  default 3
++//   "touch:rotationRange"   rotationAngle, degrees      default [0, 27]
++//   "touch:forceRange"      force                       default [0.38, 0.80]
++//
++// -- and keeps it for the rest of the gesture, wobbling slightly as a
++// pressed finger does.
++// ---------------------------------------------------------------------------
++
++namespace {
++
++struct FingerRanges {
++  double mRadiusLo = 18, mRadiusHi = 31;
++  double mRadiusYDelta = 3;
++  double mRotationLo = 0, mRotationHi = 27;
++  double mForceLo = 0.38, mForceHi = 0.80;
++};
++
++void ReadRange(const char* aKey, double& aLo, double& aHi) {
++  const auto& config = MaskConfig::GetJson();
++  if (!config.is_object()) {
++    return;
++  }
++  auto range = config.find(aKey);
++  if (range != config.end() && range->is_array() && range->size() == 2 &&
++      (*range)[0].is_number() && (*range)[1].is_number()) {
++    aLo = (*range)[0].get<double>();
++    aHi = (*range)[1].get<double>();
++  }
++}
++
++const FingerRanges& Ranges() {
++  static const FingerRanges ranges = [] {
++    FingerRanges r;
++    ReadRange("touch:radiusRange", r.mRadiusLo, r.mRadiusHi);
++    ReadRange("touch:rotationRange", r.mRotationLo, r.mRotationHi);
++    ReadRange("touch:forceRange", r.mForceLo, r.mForceHi);
++    r.mRadiusYDelta =
++        MaskConfig::GetDouble("touch:radiusYDelta").value_or(r.mRadiusYDelta);
++    return r;
++  }();
++  return ranges;
++}
++
++non_crypto::XorShift128PlusRNG& FingerRng() {
++  static non_crypto::XorShift128PlusRNG rng(RandomUint64OrDie(),
++                                            RandomUint64OrDie());
++  return rng;
++}
++
++double Uniform(double aLo, double aHi) {
++  return aLo + (aHi - aLo) * FingerRng().nextDouble();
++}
++
++}  // namespace
++
++/* static */
++bool Touch::EmulatesFingers() { return MaskConfig::IsAndroidDevice(); }
++
++/* static */
++Touch::EmulatedFinger Touch::FingerFor(int32_t aIdentifier, bool aNewContact) {
++  MOZ_ASSERT(NS_IsMainThread());
++  static nsTHashMap<int32_t, EmulatedFinger> sFingers;
++  const FingerRanges& r = Ranges();
++
++  if (!aNewContact) {
++    if (auto finger = sFingers.Lookup(aIdentifier)) {
++      // The same finger, pressing a touch harder or softer.
++      EmulatedFinger& f = finger.Data();
++      const auto wobble = [](double aValue, double aBy, double aLo,
++                             double aHi) {
++        return std::clamp(aValue + Uniform(-aBy, aBy), aLo, aHi);
++      };
++      f.mRadiusX = int32_t(std::lround(
++          wobble(f.mRadiusX, 1.0, r.mRadiusLo, r.mRadiusHi)));
++      f.mRadiusY = int32_t(std::lround(wobble(
++          f.mRadiusY, 1.0, f.mRadiusX - r.mRadiusYDelta,
++          f.mRadiusX + r.mRadiusYDelta)));
++      f.mForce = float(wobble(f.mForce, 0.02, r.mForceLo, r.mForceHi));
++      return f;
++    }
++  }
++
++  EmulatedFinger finger;
++  finger.mRadiusX = int32_t(std::lround(Uniform(r.mRadiusLo, r.mRadiusHi)));
++  finger.mRadiusY = int32_t(std::lround(
++      finger.mRadiusX + Uniform(-r.mRadiusYDelta, r.mRadiusYDelta)));
++  finger.mRotationAngle = float(Uniform(r.mRotationLo, r.mRotationHi));
++  finger.mForce = float(Uniform(r.mForceLo, r.mForceHi));
++  sFingers.InsertOrUpdate(aIdentifier, finger);
++  return finger;
++}
++
+ }  // namespace mozilla::dom
+diff --git a/dom/events/Touch.h b/dom/events/Touch.h
+index 2cd6c8d46a..722e0ca5ad 100644
+--- a/dom/events/Touch.h
++++ b/dom/events/Touch.h
+@@ -72,6 +72,20 @@ class Touch final : public nsISupports,
+ 
+   EventTarget* GetOriginalTarget() const;
+ 
++  // Camoufox: the contact geometry of a fingertip, for input synthesized by
++  // automation on an emulated Android device (see Touch.cpp).
++  struct EmulatedFinger {
++    int32_t mRadiusX;  // CSS pixels
++    int32_t mRadiusY;  // CSS pixels
++    float mRotationAngle;  // degrees
++    float mForce;
++  };
++  static bool EmulatesFingers();
++  // The finger behind contact `aIdentifier`. A new contact (touchstart,
++  // pointerdown) puts a new finger down; later events for the same contact
++  // keep that finger, with the small wobble real contact geometry has.
++  static EmulatedFinger FingerFor(int32_t aIdentifier, bool aNewContact);
++
+   nsCOMPtr<EventTarget> mOriginalTarget;
+   nsCOMPtr<EventTarget> mTarget;
+   LayoutDeviceIntPoint mRefPoint;
+diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
+index 3c62015e7e..fc31f45c65 100644
+--- a/layout/style/nsMediaFeatures.cpp
++++ b/layout/style/nsMediaFeatures.cpp
+@@ -441,6 +441,13 @@ static PointerCapabilities GetPointerCapabilities(const Document* aDocument,
+ #ifdef ANDROID
+   return PointerCapabilities::Coarse;
+ #else
++  // Camoufox: an emulated Android device has a touchscreen and nothing else,
++  // as the Android build reports above: (pointer: coarse), (hover: none), and
++  // the same for any-pointer / any-hover.
++  if (MaskConfig::IsAndroidDevice()) {
++    return PointerCapabilities::Coarse;
++  }
++
+   // Report the desktop default rather than whatever the host toolkit
+   // advertises, so the capability set never varies with the machine the
+   // browser happens to be running on.

@@ -342,5 +342,9 @@
     "sensors:accelSigma": "double[>=0]",
     "sensors:gyroSigma": "double[>=0]",
     "webGl:emulateAstc": "bool",
-    "webGl:astcProfiles": "array[str]"
+    "webGl:astcProfiles": "array[str]",
+    "touch:radiusRange": "array[double, 2]",
+    "touch:radiusYDelta": "double[>=0]",
+    "touch:rotationRange": "array[double, 2]",
+    "touch:forceRange": "array[double, 2]"
 }

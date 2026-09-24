@@ -134,6 +134,9 @@ static nlohmann::json Pixel10() {
   // Overlay, File System Access pickers, Keyboard Map -- Firefox never had).
   p["device:prefs"] = {
       {"dom.documentpip.enabled", false},
+      // Android builds keep the legacy touch APIs ('ontouchstart' in window,
+      // document.createTouch), as Chrome on Android does.
+      {"dom.w3c_touch_events.legacy_apis.enabled", true},
   };
 
   return p;
