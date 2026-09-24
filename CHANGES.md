@@ -656,3 +656,4 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-canvas-text.py`: L10-13, L68
 - `tests/patches/android-client-hints.py`: L63, L76-77, L80-81, L83
 - `tests/patches/android-media-capabilities.py`: L28, L39, L41, L44-45, L47
+- `tests/patches/android-webgl.py`: L98-103, L105-106, L108
