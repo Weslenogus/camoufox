@@ -494,3 +494,23 @@ everything without the option.
 - `settings/camoucfg.jvv`: L387-388
 - `settings/properties.json`: L162-163
 - `tests/patches/android-mediump-precision.py`: new file, L1-178
+
+## Task 20 - Languages and navigator.connection
+
+`navigator.language` "fr-FR" and `navigator.languages` ["fr-FR", "fr", "en-US",
+"en"] in every realm (window, iframes, dedicated/shared/service workers), from
+the profile's accept-languages list (`locale:all`), with a fr-FR Intl locale.
+`navigator.connection` in windows and workers (`dom.netinfo.enabled` via
+`device:prefs`) with Chrome's members, new here and exposed only on the
+profile: `effectiveType` "4g", `downlink` 10, `downlinkMax` Infinity, `rtt` 50,
+`saveData` false, `onchange`; `type` "wifi" (`navigator.connection.*`).
+
+- `patches/android/android-20-languages-connection.patch` (patch; lines in the patched source tree):
+  - `dom/network/Connection.cpp`: L12-16, L89-130
+  - `dom/network/Connection.h`: L41-51
+  - `dom/network/moz.build`: L54-56
+  - `dom/webidl/NetworkInformation.webidl`: L21-28, L33-48
+- `additions/camoucfg/DeviceProfiles.cpp`: L59-74, L313-314
+- `settings/camoucfg.jvv`: L388-394
+- `settings/properties.json`: L163-169
+- `tests/patches/android-languages-connection.py`: new file, L1-133

@@ -56,6 +56,22 @@ static nlohmann::json Pixel10() {
   p["navigator.product"] = "Gecko";
   p["navigator.productSub"] = "20030107";
   p["headers.Accept-Language"] = "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
+  // French first, then English, in every realm (the accept-languages list
+  // navigator.languages reads in windows and workers alike), and a fr-FR
+  // Intl locale.
+  p["locale:all"] = "fr-FR, fr, en-US, en";
+  p["locale:language"] = "fr";
+  p["locale:region"] = "FR";
+  p["navigator.language"] = "fr-FR";
+  p["navigator.languages"] = nlohmann::json::array({"fr-FR", "fr", "en-US", "en"});
+
+  // navigator.connection: on wifi, Chrome's quality estimates of a good
+  // connection.
+  p["navigator.connection.type"] = "wifi";
+  p["navigator.connection.effectiveType"] = "4g";
+  p["navigator.connection.downlink"] = 10.0;
+  p["navigator.connection.rtt"] = 50;
+  p["navigator.connection.saveData"] = false;
 
   // User-Agent Client Hints of Chrome 155 on Android (155.0.8059.16, the
   // current Android release). Brands follow Chromium's GREASE algorithm for
@@ -294,6 +310,8 @@ static nlohmann::json Pixel10() {
       {"font.name-list.emoji", "Noto Color Emoji"},
       // WebGPU ships in Chrome on Android, in windows and every worker; a
       // phone always has it, so the host's GPU blocklist is not consulted.
+      // NetworkInformation (navigator.connection), in windows and workers.
+      {"dom.netinfo.enabled", true},
       {"dom.webgpu.enabled", true},
       {"dom.webgpu.service-workers.enabled", true},
       {"gfx.webgpu.ignore-blocklist", true},

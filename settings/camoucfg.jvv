@@ -385,5 +385,11 @@
     "@WEBGPU_LIMITS": {
         "/^(max|min)\\w+$/": "int[>=0]"
     },
-    "webGl:emulateMediumpPrecision": "bool"
+    "webGl:emulateMediumpPrecision": "bool",
+    "navigator.connection.type": "str[bluetooth, cellular, ethernet, none, wifi, other, unknown]",
+    "navigator.connection.effectiveType": "str[slow-2g, 2g, 3g, 4g]",
+    "navigator.connection.downlink": "double[>=0]",
+    "navigator.connection.downlinkMax": "double[>=0]",
+    "navigator.connection.rtt": "int[>=0]",
+    "navigator.connection.saveData": "bool"
 }

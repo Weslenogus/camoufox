@@ -160,5 +160,11 @@
   { "property": "webGpu:isFallbackAdapter", "type": "bool" },
   { "property": "webGpu:features", "type": "array" },
   { "property": "webGpu:limits", "type": "dict" },
-  { "property": "webGl:emulateMediumpPrecision", "type": "bool" }
+  { "property": "webGl:emulateMediumpPrecision", "type": "bool" },
+  { "property": "navigator.connection.type", "type": "str" },
+  { "property": "navigator.connection.effectiveType", "type": "str" },
+  { "property": "navigator.connection.downlink", "type": "double" },
+  { "property": "navigator.connection.downlinkMax", "type": "double" },
+  { "property": "navigator.connection.rtt", "type": "uint" },
+  { "property": "navigator.connection.saveData", "type": "bool" }
 ]

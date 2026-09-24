@@ -1,0 +1,139 @@
+diff --git a/dom/network/Connection.cpp b/dom/network/Connection.cpp
+index 81c9fb17e9..ffb77beb64 100644
+--- a/dom/network/Connection.cpp
++++ b/dom/network/Connection.cpp
+@@ -9,6 +9,11 @@
+ #include "Constants.h"
+ #include "mozilla/dom/WorkerPrivate.h"
+ 
++#include <limits>
++
++#include "MaskConfig.hpp"
++#include "mozilla/dom/BindingUtils.h"
++
+ /**
+  * We have to use macros here because our leak analysis tool things we are
+  * leaking strings when we have |static const nsString|. Sad :(
+@@ -81,4 +86,46 @@ already_AddRefed<Connection> Connection::CreateForWorker(
+   return ConnectionWorker::Create(aWorkerPrivate, aRv);
+ }
+ 
++// Camoufox: "navigator.connection.*" (the Android device profiles).
++ConnectionType Connection::Type() const {
++  if (mShouldResistFingerprinting) {
++    return ConnectionType::Unknown;
++  }
++  if (auto type = MaskConfig::GetString("navigator.connection.type")) {
++    if (auto value = StringToEnum<ConnectionType>(
++            nsDependentCString(type->c_str()))) {
++      return *value;
++    }
++  }
++  return mType;
++}
++
++EffectiveConnectionType Connection::EffectiveType() const {
++  if (auto type =
++          MaskConfig::GetString("navigator.connection.effectiveType")) {
++    if (auto value = StringToEnum<EffectiveConnectionType>(
++            nsDependentCString(type->c_str()))) {
++      return *value;
++    }
++  }
++  return EffectiveConnectionType::_4g;
++}
++
++double Connection::DownlinkMax() const {
++  return MaskConfig::GetDouble("navigator.connection.downlinkMax")
++      .value_or(std::numeric_limits<double>::infinity());
++}
++
++double Connection::Downlink() const {
++  return MaskConfig::GetDouble("navigator.connection.downlink").value_or(10.0);
++}
++
++uint64_t Connection::Rtt() const {
++  return MaskConfig::GetUint64("navigator.connection.rtt").value_or(50);
++}
++
++bool Connection::SaveData() const {
++  return MaskConfig::GetBool("navigator.connection.saveData").value_or(false);
++}
++
+ }  // namespace mozilla::dom::network
+diff --git a/dom/network/Connection.h b/dom/network/Connection.h
+index e37f830773..0eafc60d69 100644
+--- a/dom/network/Connection.h
++++ b/dom/network/Connection.h
+@@ -38,11 +38,17 @@ class Connection : public DOMEventTargetHelper {
+   virtual JSObject* WrapObject(JSContext* aCx,
+                                JS::Handle<JSObject*> aGivenProto) override;
+ 
+-  ConnectionType Type() const {
+-    return mShouldResistFingerprinting
+-               ? static_cast<ConnectionType>(ConnectionType::Unknown)
+-               : mType;
+-  }
++  ConnectionType Type() const;
++
++  // Camoufox: Chrome's network-quality members, from "navigator.connection.*"
++  // (the Android device profiles). The values are fixed: the emulated phone
++  // stays on the same wifi.
++  EffectiveConnectionType EffectiveType() const;
++  double DownlinkMax() const;
++  double Downlink() const;
++  uint64_t Rtt() const;
++  bool SaveData() const;
++  IMPL_EVENT_HANDLER(change)
+ 
+   bool GetIsWifi() const {
+     NS_ASSERT_OWNINGTHREAD(Connection);
+diff --git a/dom/network/moz.build b/dom/network/moz.build
+index 7d42cfa760..1e9ed664ca 100644
+--- a/dom/network/moz.build
++++ b/dom/network/moz.build
+@@ -51,3 +51,6 @@ IPDL_SOURCES += [
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/webidl/NetworkInformation.webidl b/dom/webidl/NetworkInformation.webidl
+index 2020044d2e..e98bcbdc40 100644
+--- a/dom/webidl/NetworkInformation.webidl
++++ b/dom/webidl/NetworkInformation.webidl
+@@ -18,9 +18,33 @@ enum ConnectionType {
+     "unknown"
+ };
+ 
++// https://wicg.github.io/netinfo/#effectiveconnectiontype-enum
++enum EffectiveConnectionType {
++    "2g",
++    "3g",
++    "4g",
++    "slow-2g"
++};
++
+ [Pref="dom.netinfo.enabled",
+  Exposed=(Window,Worker)]
+ interface NetworkInformation : EventTarget {
+     readonly    attribute ConnectionType type;
++
++    // Camoufox: Chrome's network-quality members, on the Android device
++    // profiles only (values from "navigator.connection.*").
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++    readonly    attribute EffectiveConnectionType effectiveType;
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++    readonly    attribute unrestricted double downlinkMax;
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++    readonly    attribute double downlink;
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++    readonly    attribute unsigned long long rtt;
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++    readonly    attribute boolean saveData;
++    [Func="mozilla::dom::AndroidDevice::Exposed"]
++                attribute EventHandler   onchange;
++
+                 attribute EventHandler   ontypechange;
+ };
