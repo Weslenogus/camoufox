@@ -274,6 +274,9 @@ static nlohmann::json Pixel10() {
   p["mediaCapabilities:maxHeight"] = 1080;
   p["mediaCapabilities:maxFramerate"] = 30;
 
+  // performance.memory: the JS heap limit Chrome reports on the phone.
+  p["performance.memory.jsHeapSizeLimit"] = 2147483648ULL;
+
   // Battery: 78%, on battery, four hours left (chargingTime is then
   // Infinity, as the Battery Status API specifies).
   p["battery:level"] = 0.78;
@@ -318,6 +321,9 @@ static nlohmann::json Pixel10() {
        "q=0.7"},
       {"image.http.accept",
        "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
+      // performance.now() at 1 ms resolution in every realm.
+      {"privacy.reduceTimerPrecision", true},
+      {"privacy.resistFingerprinting.reduceTimerPrecision.microseconds", 1000},
       // NetworkInformation (navigator.connection), in windows and workers.
       {"dom.netinfo.enabled", true},
       {"dom.webgpu.enabled", true},

@@ -391,5 +391,6 @@
     "navigator.connection.downlink": "double[>=0]",
     "navigator.connection.downlinkMax": "double[>=0]",
     "navigator.connection.rtt": "int[>=0]",
-    "navigator.connection.saveData": "bool"
+    "navigator.connection.saveData": "bool",
+    "performance.memory.jsHeapSizeLimit": "int[>0]"
 }

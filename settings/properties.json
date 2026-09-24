@@ -166,5 +166,6 @@
   { "property": "navigator.connection.downlink", "type": "double" },
   { "property": "navigator.connection.downlinkMax", "type": "double" },
   { "property": "navigator.connection.rtt", "type": "uint" },
-  { "property": "navigator.connection.saveData", "type": "bool" }
+  { "property": "navigator.connection.saveData", "type": "bool" },
+  { "property": "performance.memory.jsHeapSizeLimit", "type": "uint" }
 ]

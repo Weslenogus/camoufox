@@ -530,3 +530,26 @@ request type (document, image, same-origin and cross-site fetch).
 - `additions/camoucfg/DeviceProfiles.cpp`: L313-320
 - `additions/camoucfg/UAClientHints.hpp`: L108-115
 - `tests/patches/android-fetch-metadata.py`: new file, L1-100
+
+## Task 22 - performance.memory and timer resolution
+
+`performance.memory`, Chrome's non-standard heap report, on the profile only:
+a new `MemoryInfo` interface (no interface object, as in Chrome) with
+`jsHeapSizeLimit` 2147483648 (`performance.memory.jsHeapSizeLimit`) and used
+and total sizes taken from the SpiderMonkey GC heap, rounded up to Chromium's
+100 exponential buckets (10 MB to 4 GB, three significant digits) and
+refreshed at most every 20 minutes, as Chrome does without precise memory
+info. `performance.now()` is pinned to 1 ms resolution in every realm
+(`device:prefs`), and workers keep their `timeOrigin`.
+
+- `patches/android/android-22-performance.patch` (patch; lines in the patched source tree):
+  - `dom/performance/MemoryInfo.cpp`: L1-96
+  - `dom/performance/MemoryInfo.h`: L1-58
+  - `dom/performance/Performance.cpp`: L7-8, L160-163
+  - `dom/performance/Performance.h`: L26, L86-88
+  - `dom/performance/moz.build`: L12, L38, L70-72
+  - `dom/webidl/Performance.webidl`: L60-74
+- `additions/camoucfg/DeviceProfiles.cpp`: L277-279, L324-326
+- `settings/camoucfg.jvv`: L394-395
+- `settings/properties.json`: L169-170
+- `tests/patches/android-performance.py`: new file, L1-96
