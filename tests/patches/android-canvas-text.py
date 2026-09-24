@@ -7,8 +7,10 @@ fractional advances. So:
 
   * measureText() in sans-serif equals measureText() in Roboto, at the
     default font and at 20px;
-  * widths are linear in the font size -- width at 200px is exactly ten
-    times the width at 20px -- which hinted, pixel-snapped advances are not;
+  * widths are linear in the font size -- width at 200px is ten times the
+    width at 20px, to within Gecko's 1/60 px storage of each glyph advance
+    (half a unit per glyph) -- which hinted advances, snapped to whole
+    pixels at each size, are not by several pixels;
   * widths are fractional, not rounded to whole pixels;
   * the same measurement repeated, or taken in a worker's OffscreenCanvas,
     is identical (no noise).
@@ -63,7 +65,7 @@ async def main(binary) -> bool:
         "default font": d["defaultFont"],
         "default text is Roboto": abs(d["defaultWidth"] - d["defaultRoboto"]) < 1e-6,
         "20px sans-serif is Roboto": abs(d["sans20"] - d["roboto20"]) < 1e-6,
-        "width linear in size": abs(d["sans200"] - 10 * d["sans20"]) < 0.05,
+        "width linear in size": abs(d["sans200"] - 10 * d["sans20"]) <= len(TEXT) / 120,
         "fractional width": abs(d["sans20"] - round(d["sans20"])) > 1e-3,
         "repeatable": d["again20"] == d["sans20"],
         "worker agrees": abs(d["worker20"] - d["sans20"]) < 1e-6,
