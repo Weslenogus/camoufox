@@ -127,3 +127,35 @@ since M148.
 - `settings/camoucfg.jvv`: L318-321
 - `settings/properties.json`: L118
 - `tests/patches/android-desktop-apis.py`: new file, L1-82
+
+## Task 4 - Android-only APIs: Web NFC, Contact Picker, window.orientation
+
+APIs only Chrome on Android has, exposed on the Android profile only (gate
+`AndroidDevice::Exposed`, secure contexts where Chrome requires them). Web
+NFC -- `NDEFReader`, `NDEFMessage`, `NDEFRecord`, `NDEFReadingEvent` -- with
+working records and messages, `onreading`/`onreadingerror`, and `scan()`,
+`write()` and `makeReadOnly()` refusing with NotAllowedError, as Chrome does
+without the NFC permission. The Contact Picker -- `navigator.contacts`
+(`ContactsManager`), `getProperties()` resolving Chrome's five properties,
+`select()` requiring user activation, and `ContactAddress`. `window.orientation`
+(0 for the profile's portrait screen) and `window.onorientationchange`, which
+Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
+
+- `patches/android/android-04-android-apis.patch` (patch; lines in the patched source tree):
+  - `dom/base/AndroidDevice.cpp`: L26-28
+  - `dom/base/AndroidDevice.h`: L27-29
+  - `dom/base/ContactsManager.cpp`: L1-90
+  - `dom/base/ContactsManager.h`: L1-82
+  - `dom/base/NDEFReader.cpp`: L1-345
+  - `dom/base/NDEFReader.h`: L1-165
+  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2390-2396
+  - `dom/base/Navigator.h`: L89, L237-238, L320
+  - `dom/base/moz.build`: L566-572, L575-576
+  - `dom/base/nsGlobalWindowInner.h`: L600-615
+  - `dom/bindings/Bindings.conf`: L123-127, L579-591
+  - `dom/webidl/ContactsManager.webidl`: L1-54
+  - `dom/webidl/NDEFReader.webidl`: L1-102
+  - `dom/webidl/Navigator.webidl`: L319-326
+  - `dom/webidl/Window.webidl`: L716, L718, L722-726, L728
+  - `dom/webidl/moz.build`: L499, L845
+- `tests/patches/android-api-stubs.py`: new file, L1-115
