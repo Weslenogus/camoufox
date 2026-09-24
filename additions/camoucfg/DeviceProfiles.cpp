@@ -25,6 +25,10 @@ static nlohmann::json Pixel10() {
   // Everything gated on "this is an Android device" reads this one key.
   p["device:android"] = true;
 
+  // Tensor G5 is arm64: NaNs created by arithmetic carry ARM's default NaN
+  // bit pattern (0x7FC00000), not x86's 0xFFC00000.
+  p["cpu:armDefaultNaN"] = true;
+
   return p;
 }
 

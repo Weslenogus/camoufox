@@ -1,0 +1,542 @@
+diff --git a/js/public/ArmNaN.h b/js/public/ArmNaN.h
+new file mode 100644
+index 0000000000..7210dcef38
+--- /dev/null
++++ b/js/public/ArmNaN.h
+@@ -0,0 +1,29 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
++ * vim: set ts=8 sts=2 et sw=2 tw=80:
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Camoufox: ARM default-NaN emulation. */
++
++#ifndef js_ArmNaN_h
++#define js_ArmNaN_h
++
++#include "jstypes.h"
++
++namespace JS {
++
++/**
++ * Make NaNs that arithmetic creates -- and NaNs written to typed arrays,
++ * DataViews and the asm.js heap -- carry the bit pattern an ARM CPU produces
++ * (0x7FC00000 / 0x7FF8000000000000), on any host. x86 creates the negative
++ * 0xFFC00000 instead, and the sign bit is readable from a Float32Array.
++ *
++ * Process-wide. The JITs read it when they compile, so it must be set before
++ * any script runs and never changed afterwards.
++ */
++extern JS_PUBLIC_API void SetUseArmDefaultNaN(bool value);
++
++}  // namespace JS
++
++#endif /* js_ArmNaN_h */
+diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.cpp
+index 7e2b4c265d..0fbc30ebac 100644
+--- a/js/src/builtin/DataViewObject.cpp
++++ b/js/src/builtin/DataViewObject.cpp
+@@ -575,7 +575,7 @@ bool DataViewObject::write(JSContext* cx, Handle<DataViewObject*> obj,
+ 
+   // See the comment in ElementSpecific::doubleToNative.
+   if constexpr (!std::numeric_limits<NativeType>::is_integer) {
+-    if (js::SupportDifferentialTesting()) {
++    if (js::CanonicalizeStoredNaN()) {
+       value = JS::CanonicalizeNaN(static_cast<double>(value));
+     }
+   }
+diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
+index 4eb952e497..a48d942c35 100644
+--- a/js/src/jit/CacheIRCompiler.cpp
++++ b/js/src/jit/CacheIRCompiler.cpp
+@@ -7685,8 +7685,9 @@ bool CacheIRCompiler::emitStoreTypedArrayElement(ObjOperandId objId,
+   } else if (Scalar::isFloatingType(elementType)) {
+     Register temp = scratch2 ? scratch2->get() : InvalidReg;
+ 
+-    // Canonicalize floating point values for differential testing.
+-    if (js::SupportDifferentialTesting()) {
++    // Canonicalize floating point values for differential testing and for
++    // ARM NaN emulation (see js::CanonicalizeStoredNaN).
++    if (js::CanonicalizeStoredNaN()) {
+       masm.canonicalizeDoubleNaN(floatScratch0);
+     }
+ 
+@@ -8213,8 +8214,9 @@ bool CacheIRCompiler::emitStoreDataViewValueResult(
+   };
+ #endif
+ 
+-  // Canonicalize floating point values for differential testing.
+-  if (Scalar::isFloatingType(elementType) && js::SupportDifferentialTesting()) {
++  // Canonicalize floating point values for differential testing and for ARM
++  // NaN emulation (see js::CanonicalizeStoredNaN).
++  if (Scalar::isFloatingType(elementType) && js::CanonicalizeStoredNaN()) {
+     masm.canonicalizeDoubleNaN(floatScratch0);
+   }
+ 
+diff --git a/js/src/jit/TypePolicy.cpp b/js/src/jit/TypePolicy.cpp
+index fe5710f22a..38087fc7a4 100644
+--- a/js/src/jit/TypePolicy.cpp
++++ b/js/src/jit/TypePolicy.cpp
+@@ -945,8 +945,9 @@ bool StoreUnboxedScalarPolicy::adjustValueInput(TempAllocator& alloc,
+       MOZ_CRASH("Invalid array type");
+   }
+ 
+-  // Canonicalize floating point values for differential testing.
+-  if (Scalar::isFloatingType(writeType) && js::SupportDifferentialTesting()) {
++  // Canonicalize floating point values for differential testing and for ARM
++  // NaN emulation (see js::CanonicalizeStoredNaN).
++  if (Scalar::isFloatingType(writeType) && js::CanonicalizeStoredNaN()) {
+     value = MCanonicalizeNaN::New(alloc, value);
+     ins->block()->insertBefore(ins, value->toInstruction());
+   }
+diff --git a/js/src/jsapi.cpp b/js/src/jsapi.cpp
+index b93285b7f8..1c43df1f77 100644
+--- a/js/src/jsapi.cpp
++++ b/js/src/jsapi.cpp
+@@ -38,6 +38,7 @@
+ #include "gc/PublicIterators.h"
+ #include "jit/JitSpewer.h"
+ #include "jit/TrampolineNatives.h"
++#include "js/ArmNaN.h"  // JS::SetUseArmDefaultNaN
+ #include "js/CallAndConstruct.h"  // JS::IsCallable
+ #include "js/CharacterEncoding.h"
+ #include "js/ColumnNumber.h"  // JS::TaggedColumnNumberOneOrigin, JS::ColumnNumberOneOrigin
+@@ -5123,6 +5124,8 @@ JS_PUBLIC_API void NoteIntentionalCrash() {
+ bool gSupportDifferentialTesting = false;
+ #endif  // DEBUG
+ 
++bool gUseArmDefaultNaN = false;
++
+ }  // namespace js
+ 
+ #ifdef DEBUG
+@@ -5132,3 +5135,7 @@ JS_PUBLIC_API void JS::SetSupportDifferentialTesting(bool value) {
+ }
+ 
+ #endif  // DEBUG
++
++JS_PUBLIC_API void JS::SetUseArmDefaultNaN(bool value) {
++  js::gUseArmDefaultNaN = value;
++}
+diff --git a/js/src/moz.build b/js/src/moz.build
+index a926eaffb4..d433899af7 100644
+--- a/js/src/moz.build
++++ b/js/src/moz.build
+@@ -99,6 +99,7 @@ EXPORTS.js += [
+     "../public/AllocationLogging.h",
+     "../public/AllocationRecording.h",
+     "../public/AllocPolicy.h",
++    "../public/ArmNaN.h",
+     "../public/Array.h",
+     "../public/ArrayBuffer.h",
+     "../public/ArrayBufferMaybeShared.h",
+diff --git a/js/src/util/DifferentialTesting.h b/js/src/util/DifferentialTesting.h
+index 60ddb1a56b..3ead16b049 100644
+--- a/js/src/util/DifferentialTesting.h
++++ b/js/src/util/DifferentialTesting.h
+@@ -20,6 +20,32 @@ inline bool SupportDifferentialTesting() {
+ #endif
+ }
+ 
++// Camoufox: produce the NaN bit patterns of an ARM CPU on any host.
++//
++// x86 and ARM agree on every non-NaN float result and on how an existing NaN
++// propagates. They disagree only on the NaN an operation *creates* from
++// ordered operands (Infinity - Infinity, 0 * Infinity, 0 / 0, sqrt(-1)): SSE
++// produces the negative "real indefinite" 0xFFC00000, ARM the positive default
++// NaN 0x7FC00000. That one sign bit is readable from a typed array
++// (FingerprintJS's architecture signal) and from wasm's reinterpret ops.
++//
++// Set once per process before any script runs (JS::SetUseArmDefaultNaN). The
++// JITs read it at compile time, so it must not change afterwards.
++inline bool UseArmDefaultNaN() {
++  extern bool gUseArmDefaultNaN;
++  return gUseArmDefaultNaN;
++}
++
++// Whether NaNs written to float storage a script can read back bit-for-bit
++// (typed arrays, DataView, the asm.js heap) are canonicalized first.
++// Differential testing wants that to compare runs across CPUs; ARM emulation
++// wants it because the canonical NaN, 0x7FC00000, is ARM's default NaN. A JS
++// Value can only hold a hardware-generated NaN or the canonical one, so
++// canonicalizing at the store is exactly what an ARM CPU would have written.
++inline bool CanonicalizeStoredNaN() {
++  return SupportDifferentialTesting() || UseArmDefaultNaN();
++}
++
+ }  // namespace js
+ 
+ #endif /* util_DifferentialTesting_h */
+diff --git a/js/src/vm/TypedArrayObject-inl.h b/js/src/vm/TypedArrayObject-inl.h
+index 2702836452..06539a42bc 100644
+--- a/js/src/vm/TypedArrayObject-inl.h
++++ b/js/src/vm/TypedArrayObject-inl.h
+@@ -665,8 +665,9 @@ class ElementSpecific {
+       // it deliberately doesn't specify the bit pattern written to a
+       // typed array when NaN is written into it.  This bit-pattern
+       // inconsistency could confuse differential testing, so always
+-      // canonicalize NaN values in differential testing.
+-      if (js::SupportDifferentialTesting()) {
++      // canonicalize NaN values in differential testing. ARM NaN emulation
++      // canonicalizes too: the canonical NaN is ARM's default NaN.
++      if (js::CanonicalizeStoredNaN()) {
+         d = JS::CanonicalizeNaN(d);
+       }
+     }
+diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
+index 88aab20a67..a2e3306dec 100644
+--- a/js/src/vm/TypedArrayObject.cpp
++++ b/js/src/vm/TypedArrayObject.cpp
+@@ -1270,7 +1270,7 @@ bool TypedArrayObjectTemplate<NativeType>::convertValue(JSContext* cx,
+   }
+ 
+   if constexpr (!std::numeric_limits<NativeType>::is_integer) {
+-    if (js::SupportDifferentialTesting()) {
++    if (js::CanonicalizeStoredNaN()) {
+       // See the comment in ElementSpecific::doubleToNative.
+       d = JS::CanonicalizeNaN(d);
+     }
+@@ -3111,7 +3111,7 @@ static NativeType ConvertToNativeType(const Value& value) {
+   if constexpr (!std::numeric_limits<NativeType>::is_integer) {
+     double d = value.toNumber();
+ 
+-    if (js::SupportDifferentialTesting()) {
++    if (js::CanonicalizeStoredNaN()) {
+       // See the comment in ElementSpecific::doubleToNative.
+       d = JS::CanonicalizeNaN(d);
+     }
+@@ -3947,7 +3947,7 @@ template <typename NativeType>
+ static void TypedArraySliceCopySlowSet(TypedArrayObject* tarray, size_t index,
+                                        double value) {
+   if constexpr (!std::numeric_limits<NativeType>::is_integer) {
+-    if (js::SupportDifferentialTesting()) {
++    if (js::CanonicalizeStoredNaN()) {
+       // See the comment in ElementSpecific::doubleToNative.
+       value = JS::CanonicalizeNaN(value);
+     }
+diff --git a/js/src/wasm/WasmBaselineCompile.cpp b/js/src/wasm/WasmBaselineCompile.cpp
+index 2af7ad7f58..28f06ffaa0 100644
+--- a/js/src/wasm/WasmBaselineCompile.cpp
++++ b/js/src/wasm/WasmBaselineCompile.cpp
+@@ -141,6 +141,8 @@
+ 
+ #include "wasm/WasmBaselineCompile.h"
+ 
++#include "util/DifferentialTesting.h"
++
+ #include "wasm/WasmAnyRef.h"
+ #include "wasm/WasmBCClass.h"
+ #include "wasm/WasmBCDefs.h"
+@@ -3005,20 +3007,59 @@ static void EqzI64(MacroAssembler& masm, RegI64 rs, RegI32 rd) {
+ #endif
+ }
+ 
++// Camoufox: ARM default NaN (see js::UseArmDefaultNaN). A NaN operand
++// propagates the same way on x86 and ARM, so only a NaN created from ordered
++// operands is replaced -- with the canonical NaN, which is ARM's default NaN.
++// The operands are tested before the operation because `rsd` is both an
++// operand and the result.
++template <typename Op>
++static void WithArmDefaultNaNF64(MacroAssembler& masm, RegF64 rs, RegF64 rsd,
++                                 Op op) {
++  if (!js::UseArmDefaultNaN()) {
++    op();
++    return;
++  }
++  Label operandIsNaN, done;
++  masm.branchDouble(Assembler::DoubleUnordered, rsd, rs, &operandIsNaN);
++  op();
++  masm.canonicalizeDoubleNaN(rsd);
++  masm.jump(&done);
++  masm.bind(&operandIsNaN);
++  op();
++  masm.bind(&done);
++}
++
++template <typename Op>
++static void WithArmDefaultNaNF32(MacroAssembler& masm, RegF32 rs, RegF32 rsd,
++                                 Op op) {
++  if (!js::UseArmDefaultNaN()) {
++    op();
++    return;
++  }
++  Label operandIsNaN, done;
++  masm.branchFloat(Assembler::DoubleUnordered, rsd, rs, &operandIsNaN);
++  op();
++  masm.canonicalizeFloatNaN(rsd);
++  masm.jump(&done);
++  masm.bind(&operandIsNaN);
++  op();
++  masm.bind(&done);
++}
++
+ static void AddF64(MacroAssembler& masm, RegF64 rs, RegF64 rsd) {
+-  masm.addDouble(rs, rsd);
++  WithArmDefaultNaNF64(masm, rs, rsd, [&] { masm.addDouble(rs, rsd); });
+ }
+ 
+ static void SubF64(MacroAssembler& masm, RegF64 rs, RegF64 rsd) {
+-  masm.subDouble(rs, rsd);
++  WithArmDefaultNaNF64(masm, rs, rsd, [&] { masm.subDouble(rs, rsd); });
+ }
+ 
+ static void MulF64(MacroAssembler& masm, RegF64 rs, RegF64 rsd) {
+-  masm.mulDouble(rs, rsd);
++  WithArmDefaultNaNF64(masm, rs, rsd, [&] { masm.mulDouble(rs, rsd); });
+ }
+ 
+ static void DivF64(MacroAssembler& masm, RegF64 rs, RegF64 rsd) {
+-  masm.divDouble(rs, rsd);
++  WithArmDefaultNaNF64(masm, rs, rsd, [&] { masm.divDouble(rs, rsd); });
+ }
+ 
+ static void MinF64(BaseCompiler& bc, RegF64 rs, RegF64 rsd) {
+@@ -3068,23 +3109,23 @@ static void NegateF64(MacroAssembler& masm, RegF64 rsd) {
+ }
+ 
+ static void SqrtF64(MacroAssembler& masm, RegF64 rsd) {
+-  masm.sqrtDouble(rsd, rsd);
++  WithArmDefaultNaNF64(masm, rsd, rsd, [&] { masm.sqrtDouble(rsd, rsd); });
+ }
+ 
+ static void AddF32(MacroAssembler& masm, RegF32 rs, RegF32 rsd) {
+-  masm.addFloat32(rs, rsd);
++  WithArmDefaultNaNF32(masm, rs, rsd, [&] { masm.addFloat32(rs, rsd); });
+ }
+ 
+ static void SubF32(MacroAssembler& masm, RegF32 rs, RegF32 rsd) {
+-  masm.subFloat32(rs, rsd);
++  WithArmDefaultNaNF32(masm, rs, rsd, [&] { masm.subFloat32(rs, rsd); });
+ }
+ 
+ static void MulF32(MacroAssembler& masm, RegF32 rs, RegF32 rsd) {
+-  masm.mulFloat32(rs, rsd);
++  WithArmDefaultNaNF32(masm, rs, rsd, [&] { masm.mulFloat32(rs, rsd); });
+ }
+ 
+ static void DivF32(MacroAssembler& masm, RegF32 rs, RegF32 rsd) {
+-  masm.divFloat32(rs, rsd);
++  WithArmDefaultNaNF32(masm, rs, rsd, [&] { masm.divFloat32(rs, rsd); });
+ }
+ 
+ static void MinF32(BaseCompiler& bc, RegF32 rs, RegF32 rsd) {
+@@ -3135,7 +3176,7 @@ static void NegateF32(MacroAssembler& masm, RegF32 rsd) {
+ }
+ 
+ static void SqrtF32(MacroAssembler& masm, RegF32 rsd) {
+-  masm.sqrtFloat32(rsd, rsd);
++  WithArmDefaultNaNF32(masm, rsd, rsd, [&] { masm.sqrtFloat32(rsd, rsd); });
+ }
+ 
+ #ifndef RABALDR_I64_TO_FLOAT_CALLOUT
+diff --git a/js/src/wasm/WasmIonCompile.cpp b/js/src/wasm/WasmIonCompile.cpp
+index 9c79b9cf07..3d61404969 100644
+--- a/js/src/wasm/WasmIonCompile.cpp
++++ b/js/src/wasm/WasmIonCompile.cpp
+@@ -906,6 +906,44 @@ class FunctionCompiler {
+     return IsFloatingPointType(type) && !codeMeta().isAsmJS();
+   }
+ 
++  // Camoufox: ARM default NaN (see js::UseArmDefaultNaN). `result` was
++  // computed from `lhs` and, for a binary op, `rhs`. A NaN operand propagates
++  // the same way on x86 and ARM, so only a NaN created from ordered operands
++  // is replaced -- with the canonical NaN, which is ARM's default NaN:
++  //
++  //   (lhs == lhs && rhs == rhs) ? canonicalize(result) : result
++  MDefinition* armDefaultNaN(MDefinition* result, MDefinition* lhs,
++                             MDefinition* rhs = nullptr) {
++    if (!result || !js::UseArmDefaultNaN() ||
++        !IsFloatingPointType(result->type())) {
++      return result;
++    }
++    MCompare::CompareType compareType = result->type() == MIRType::Float32
++                                            ? MCompare::Compare_Float32
++                                            : MCompare::Compare_Double;
++    auto isOrdered = [&](MDefinition* operand) -> MDefinition* {
++      auto* self =
++          MCompare::NewWasm(alloc(), operand, operand, JSOp::Eq, compareType);
++      curBlock_->add(self);
++      return self;
++    };
++
++    MDefinition* operandsOrdered = isOrdered(lhs);
++    if (rhs) {
++      auto* both = MBitAnd::New(alloc(), operandsOrdered, isOrdered(rhs),
++                                MIRType::Int32);
++      curBlock_->add(both);
++      operandsOrdered = both;
++    }
++
++    auto* canonical = MCanonicalizeNaN::New(alloc(), result);
++    curBlock_->add(canonical);
++    auto* select =
++        MWasmSelect::New(alloc(), canonical, result, operandsOrdered);
++    curBlock_->add(select);
++    return select;
++  }
++
+   MDefinition* sub(MDefinition* lhs, MDefinition* rhs, MIRType type) {
+     if (inDeadCode()) {
+       return nullptr;
+@@ -1507,9 +1545,9 @@ class FunctionCompiler {
+                                     MDefinition* value) {
+     MOZ_ASSERT(codeMeta().isAsmJS());
+ 
+-    // Canonicalize floating point values for differential testing.
+-    if (Scalar::isFloatingType(accessType) &&
+-        js::SupportDifferentialTesting()) {
++    // Canonicalize floating point values for differential testing and for
++    // ARM NaN emulation (see js::CanonicalizeStoredNaN).
++    if (Scalar::isFloatingType(accessType) && js::CanonicalizeStoredNaN()) {
+       auto* canonicalize = MCanonicalizeNaN::New(alloc(), value);
+       curBlock_->add(canonicalize);
+       return canonicalize;
+@@ -5946,6 +5984,7 @@ class FunctionCompiler {
+   bool emitConversion(ValType operandType, ValType resultType);
+   template <typename MIRClass>
+   bool emitUnaryWithType(ValType operandType, MIRType mirType);
++  bool emitSqrt(ValType operandType, MIRType mirType);
+   template <typename MIRClass>
+   bool emitConversionWithType(ValType operandType, ValType resultType,
+                               MIRType mirType);
+@@ -6870,6 +6909,16 @@ bool FunctionCompiler::emitUnaryWithType(ValType operandType, MIRType mirType) {
+   return true;
+ }
+ 
++bool FunctionCompiler::emitSqrt(ValType operandType, MIRType mirType) {
++  MDefinition* input;
++  if (!iter().readUnary(operandType, &input)) {
++    return false;
++  }
++
++  iter().setResult(armDefaultNaN(unary<MSqrt>(input, mirType), input));
++  return true;
++}
++
+ template <typename MIRClass>
+ bool FunctionCompiler::emitConversionWithType(ValType operandType,
+                                               ValType resultType,
+@@ -6987,7 +7036,7 @@ bool FunctionCompiler::emitAdd(ValType type, MIRType mirType) {
+     return false;
+   }
+ 
+-  iter().setResult(add(lhs, rhs, mirType));
++  iter().setResult(armDefaultNaN(add(lhs, rhs, mirType), lhs, rhs));
+   return true;
+ }
+ 
+@@ -6998,7 +7047,7 @@ bool FunctionCompiler::emitSub(ValType type, MIRType mirType) {
+     return false;
+   }
+ 
+-  iter().setResult(sub(lhs, rhs, mirType));
++  iter().setResult(armDefaultNaN(sub(lhs, rhs, mirType), lhs, rhs));
+   return true;
+ }
+ 
+@@ -7067,9 +7116,10 @@ bool FunctionCompiler::emitMul(ValType operandType, MIRType mirType) {
+     return false;
+   }
+ 
+-  iter().setResult(
++  iter().setResult(armDefaultNaN(
+       mul(lhs, rhs, mirType,
+-          mirType == MIRType::Int32 ? MMul::Integer : MMul::Normal));
++          mirType == MIRType::Int32 ? MMul::Integer : MMul::Normal),
++      lhs, rhs));
+   return true;
+ }
+ 
+@@ -7081,7 +7131,7 @@ bool FunctionCompiler::emitDiv(ValType operandType, MIRType mirType,
+     return false;
+   }
+ 
+-  iter().setResult(div(lhs, rhs, mirType, isUnsigned));
++  iter().setResult(armDefaultNaN(div(lhs, rhs, mirType, isUnsigned), lhs, rhs));
+   return true;
+ }
+ 
+@@ -10341,7 +10391,7 @@ bool FunctionCompiler::emitBodyExprs() {
+       case uint16_t(Op::F32Nearest):
+         CHECK(emitUnaryMathBuiltinCall(SASigNearbyIntF));
+       case uint16_t(Op::F32Sqrt):
+-        CHECK(emitUnaryWithType<MSqrt>(ValType::F32, MIRType::Float32));
++        CHECK(emitSqrt(ValType::F32, MIRType::Float32));
+       case uint16_t(Op::F32Add):
+         CHECK(emitAdd(ValType::F32, MIRType::Float32));
+       case uint16_t(Op::F32Sub):
+@@ -10370,7 +10420,7 @@ bool FunctionCompiler::emitBodyExprs() {
+       case uint16_t(Op::F64Nearest):
+         CHECK(emitUnaryMathBuiltinCall(SASigNearbyIntD));
+       case uint16_t(Op::F64Sqrt):
+-        CHECK(emitUnaryWithType<MSqrt>(ValType::F64, MIRType::Double));
++        CHECK(emitSqrt(ValType::F64, MIRType::Double));
+       case uint16_t(Op::F64Add):
+         CHECK(emitAdd(ValType::F64, MIRType::Double));
+       case uint16_t(Op::F64Sub):
+diff --git a/js/src/wasm/WasmModule.cpp b/js/src/wasm/WasmModule.cpp
+index 95ea453508..52aec59db4 100644
+--- a/js/src/wasm/WasmModule.cpp
++++ b/js/src/wasm/WasmModule.cpp
+@@ -247,7 +247,7 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
+   uint32_t cpu = ObservedCPUFeatures();
+ 
+   if (!buildId->reserve(buildId->length() +
+-                        13 /* "()" + 8 nibbles + "m[+-][+-]" */)) {
++                        14 /* "()" + 8 nibbles + "m[+-][+-]" + "a" */)) {
+     return false;
+   }
+ 
+@@ -266,6 +266,12 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
+       wasm::IsHugeMemoryEnabled(AddressType::I64, PageSize::Standard) ? '+'
+                                                                       : '-');
+ 
++  // Camoufox: code compiled with ARM NaN emulation differs from code compiled
++  // without it, so a cached module must never cross between the two.
++  if (js::UseArmDefaultNaN()) {
++    buildId->infallibleAppend('a');
++  }
++
+   // We don't expect huge memory to be supported if custom page sizes are used.
+ #ifdef ENABLE_WASM_CUSTOM_PAGE_SIZES
+   MOZ_RELEASE_ASSERT(
+diff --git a/js/xpconnect/src/XPCJSContext.cpp b/js/xpconnect/src/XPCJSContext.cpp
+index b74f9a8392..01bdf8f76e 100644
+--- a/js/xpconnect/src/XPCJSContext.cpp
++++ b/js/xpconnect/src/XPCJSContext.cpp
+@@ -6,6 +6,9 @@
+ 
+ #include "mozilla/UniquePtr.h"
+ 
++#include "MaskConfig.hpp"
++#include "js/ArmNaN.h"
++
+ #include "xpcprivate.h"
+ #include "xpcpublic.h"
+ #include "XPCWrapper.h"
+@@ -1235,6 +1238,13 @@ static JS::LoggingInterface loggingInterface = {GetLoggerByName, LogPrintVA,
+                                                 LogPrintFMT, GetLevelRef};
+ 
+ nsresult XPCJSContext::Initialize() {
++  // Camoufox: ARM NaN emulation is process-wide and baked into JIT code when
++  // it is compiled, so it is switched on here, before this process's first
++  // JSContext exists and before any script can run.
++  if (MaskConfig::CheckBool("cpu:armDefaultNaN")) {
++    JS::SetUseArmDefaultNaN(true);
++  }
++
+   if (StaticPrefs::javascript_options_external_thread_pool_DoNotUseDirectly()) {
+     size_t threadCount = TaskController::GetPoolThreadCount();
+     size_t stackSize = TaskController::GetThreadStackSize();
+diff --git a/js/xpconnect/src/moz.build b/js/xpconnect/src/moz.build
+index 3685995f51..81477d0c99 100644
+--- a/js/xpconnect/src/moz.build
++++ b/js/xpconnect/src/moz.build
+@@ -76,3 +76,6 @@ LOCAL_INCLUDES += [
+ 
+ if CONFIG["CC_TYPE"] in ("clang", "gcc"):
+     COMPILE_FLAGS["WARNINGS_CXXFLAGS"] += ["-Werror=format"]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

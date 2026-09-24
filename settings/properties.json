@@ -112,5 +112,6 @@
   { "property": "debug", "type": "bool" },
 
   { "property": "device:profile", "type": "str" },
-  { "property": "device:android", "type": "bool" }
+  { "property": "device:android", "type": "bool" },
+  { "property": "cpu:armDefaultNaN", "type": "bool" }
 ]

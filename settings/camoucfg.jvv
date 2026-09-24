@@ -312,5 +312,6 @@
     "debug": "bool",
 
     "device:profile": "str[pixel10]",
-    "device:android": "bool"
+    "device:android": "bool",
+    "cpu:armDefaultNaN": "bool"
 }

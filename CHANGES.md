@@ -40,3 +40,38 @@ stack. An unknown profile name is reported on stderr and ignored.
 - `settings/camoucfg.jvv`: L312-315
 - `settings/properties.json`: L112-115
 - `tests/patches/helpers.py`: L60-198
+
+## Task 1 - ARM default NaN (JS JIT and wasm)
+
+x86 and ARM disagree on one bit of float arithmetic: the sign of a NaN an
+operation creates from ordered operands (`Infinity - Infinity`, `0 * Infinity`,
+`0 / 0`, `sqrt(-1)`). SSE creates `0xFFC00000`, ARM `0x7FC00000`, and
+FingerprintJS reads that sign from a `Float32Array` as its architecture
+signal. With `cpu:armDefaultNaN` (set by the profile), NaNs written to typed
+arrays, DataViews and the asm.js heap are canonicalized in every JIT tier
+(the canonical NaN is ARM's default NaN). wasm f32/f64 add, sub, mul, div and
+sqrt produce ARM's NaN in both the baseline and Ion compilers, while an
+incoming NaN still propagates untouched, as on ARM. Cached wasm code compiled
+with the emulation is never reused without it. The switch is set in
+`XPCJSContext::Initialize`, before any script runs; the public API is the new
+`js/ArmNaN.h`, so no widely included header changes.
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L28-31
+- `patches/android/android-01-arm-default-nan.patch` (patch; lines in the patched source tree):
+  - `js/public/ArmNaN.h`: L1-29
+  - `js/src/builtin/DataViewObject.cpp`: L578
+  - `js/src/jit/CacheIRCompiler.cpp`: L7688-7690, L8217-8219
+  - `js/src/jit/TypePolicy.cpp`: L948-950
+  - `js/src/jsapi.cpp`: L41, L5127-5128, L5138-5141
+  - `js/src/moz.build`: L102
+  - `js/src/util/DifferentialTesting.h`: L23-48
+  - `js/src/vm/TypedArrayObject-inl.h`: L668-670
+  - `js/src/vm/TypedArrayObject.cpp`: L1273, L3114, L3950
+  - `js/src/wasm/WasmBaselineCompile.cpp`: L144-145, L3010-3048, L3050, L3054, L3058, L3062, L3112, L3116, L3120, L3124, L3128, L3179
+  - `js/src/wasm/WasmIonCompile.cpp`: L909-946, L1548-1550, L5987, L6912-6921, L7039, L7050, L7119, L7121-7122, L7134, L10394, L10423
+  - `js/src/wasm/WasmModule.cpp`: L250, L269-274
+  - `js/xpconnect/src/XPCJSContext.cpp`: L9-11, L1241-1247
+  - `js/xpconnect/src/moz.build`: L79-81
+- `settings/camoucfg.jvv`: L315-316
+- `settings/properties.json`: L115-116
+- `tests/patches/android-arm-nan.py`: new file, L1-222
