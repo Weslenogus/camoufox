@@ -455,3 +455,17 @@ selection ignores `powerPreference`: there is one GPU.
 - `settings/properties.json`: L153-162
 - `tests/patches/android-webgpu.py`: new file, L1-99
 - `tests/patches/assets/pixel10-webgpu-report.txt`: new file, L1-177
+
+## Task 18 - Trusted touch events for automation's mouse input
+
+A finger on a touchscreen fires touch events as well as pointer events. Mouse
+input that automation synthesizes already reaches the page as a finger's
+pointer events (Task 8); each is now followed by the matching touch event --
+touchstart, touchmove while pressed, touchend -- dispatched by the browser
+itself, so `isTrusted` is true, to the element the gesture started on, with
+the same contact geometry. There is still only one pointer, and Gecko's
+compatibility mouse events and the click follow as before.
+
+- `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
+  - `dom/events/PointerEventHandler.cpp`: L7-8, L28-31, L992-1084, L1485-1491
+- `tests/patches/android-touch-trusted.py`: new file, L1-94
