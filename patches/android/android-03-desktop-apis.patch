@@ -1,0 +1,72 @@
+diff --git a/modules/libpref/Preferences.cpp b/modules/libpref/Preferences.cpp
+index c13dd1eb5b..20de37d6e4 100644
+--- a/modules/libpref/Preferences.cpp
++++ b/modules/libpref/Preferences.cpp
+@@ -9,6 +9,8 @@
+ 
+ #include "SharedPrefMap.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "base/basictypes.h"
+ #include "MainThreadUtils.h"
+ #include "mozilla/AppShutdown.h"
+@@ -4172,10 +4174,47 @@ void Preferences::InitializeUserPrefs() {
+   sPreferences->mCurrentFile = std::move(prefsFile);
+ }
+ 
++// Camoufox: the emulated device's own platform defaults ("device:prefs", an
++// object of pref name -> bool / integer / string, set by the device profiles).
++// Some platform differences are pref-gated in Gecko -- an API Android builds
++// never expose, a touch API only Android builds do -- and a pref is the
++// narrowest switch for those.
++//
++// They go on the *default* branch, after camoufox.cfg (which runs on the
++// notification just before this) so the device's defaults win over the
++// desktop ones, while a user pref -- prefs.js, user.js, Playwright's
++// firefox_user_prefs -- still overrides them. Content processes inherit the
++// result from this, the parent.
++static void ApplyDevicePrefs() {
++  const auto& config = MaskConfig::GetJson();
++  auto prefs = config.is_object() ? config.find("device:prefs") : config.end();
++  if (prefs == config.end() || !prefs->is_object()) {
++    return;
++  }
++  for (const auto& [name, value] : prefs->items()) {
++    nsresult rv = NS_ERROR_INVALID_ARG;
++    if (value.is_boolean()) {
++      rv = Preferences::SetBool(name.c_str(), value.get<bool>(),
++                                PrefValueKind::Default);
++    } else if (value.is_number_integer()) {
++      rv = Preferences::SetInt(name.c_str(), value.get<int32_t>(),
++                               PrefValueKind::Default);
++    } else if (value.is_string()) {
++      const std::string str = value.get<std::string>();
++      rv = Preferences::SetCString(name.c_str(), nsDependentCString(str.c_str()),
++                                   PrefValueKind::Default);
++    }
++    if (NS_FAILED(rv)) {
++      printf_stderr("ERROR: device:prefs could not set '%s'\n", name.c_str());
++    }
++  }
++}
++
+ /* static */
+ void Preferences::FinishInitializingUserPrefs() {
+   MOZ_ASSERT(NS_IsMainThread());
+   sPreferences->NotifyServiceObservers(NS_PREFSERVICE_READ_TOPIC_ID);
++  ApplyDevicePrefs();
+ }
+ 
+ NS_IMETHODIMP
+diff --git a/modules/libpref/moz.build b/modules/libpref/moz.build
+index fa05921295..1e3d8b8724 100644
+--- a/modules/libpref/moz.build
++++ b/modules/libpref/moz.build
+@@ -183,3 +183,6 @@ else:
+     FINAL_TARGET_PP_FILES += [
+         "greprefs.js",
+     ]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

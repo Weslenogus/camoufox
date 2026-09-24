@@ -1,0 +1,160 @@
+diff --git a/dom/base/ScreenOrientation.cpp b/dom/base/ScreenOrientation.cpp
+index 2612a0b747..cf358d650e 100644
+--- a/dom/base/ScreenOrientation.cpp
++++ b/dom/base/ScreenOrientation.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "ScreenOrientation.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "mozilla/DOMEventTargetHelper.h"
+ #include "mozilla/Hal.h"
+ #include "mozilla/Preferences.h"
+@@ -691,7 +693,46 @@ void ScreenOrientation::CleanupFullscreenListener() {
+   mFullscreenListener = nullptr;
+ }
+ 
++// Camoufox: a fixed orientation for an emulated screen that is not the host's
++// ("screen.orientation.type" and "screen.orientation.angle"). The host's own
++// screen -- almost always a landscape desktop display -- never shows through.
++static Maybe<OrientationType> ConfiguredOrientationType() {
++  static const Maybe<OrientationType> type = []() -> Maybe<OrientationType> {
++    auto value = MaskConfig::GetString("screen.orientation.type");
++    if (!value) {
++      return Nothing();
++    }
++    if (*value == "portrait-primary") {
++      return Some(OrientationType::Portrait_primary);
++    }
++    if (*value == "portrait-secondary") {
++      return Some(OrientationType::Portrait_secondary);
++    }
++    if (*value == "landscape-primary") {
++      return Some(OrientationType::Landscape_primary);
++    }
++    if (*value == "landscape-secondary") {
++      return Some(OrientationType::Landscape_secondary);
++    }
++    return Nothing();
++  }();
++  return type;
++}
++
++static Maybe<uint16_t> ConfiguredOrientationAngle() {
++  static const Maybe<uint16_t> angle = []() -> Maybe<uint16_t> {
++    if (auto value = MaskConfig::GetUint32("screen.orientation.angle")) {
++      return Some(static_cast<uint16_t>(*value % 360));
++    }
++    return Nothing();
++  }();
++  return angle;
++}
++
+ OrientationType ScreenOrientation::DeviceType(CallerType aCallerType) const {
++  if (auto type = ConfiguredOrientationType()) {
++    return *type;
++  }
+   if (nsContentUtils::ShouldResistFingerprinting(
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
+     Document* doc = GetResponsibleDocument();
+@@ -706,6 +747,9 @@ OrientationType ScreenOrientation::DeviceType(CallerType aCallerType) const {
+ }
+ 
+ uint16_t ScreenOrientation::DeviceAngle(CallerType aCallerType) const {
++  if (auto angle = ConfiguredOrientationAngle()) {
++    return *angle;
++  }
+   if (nsContentUtils::ShouldResistFingerprinting(
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
+     Document* doc = GetResponsibleDocument();
+@@ -728,6 +772,10 @@ OrientationType ScreenOrientation::GetType(CallerType aCallerType,
+     return OrientationType::Portrait_primary;
+   }
+ 
++  if (auto type = ConfiguredOrientationType()) {
++    return *type;
++  }
++
+   OrientationType orientation = bc->GetCurrentOrientationType();
+   if (nsContentUtils::ShouldResistFingerprinting(
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
+@@ -746,6 +794,10 @@ uint16_t ScreenOrientation::GetAngle(CallerType aCallerType,
+     return 0;
+   }
+ 
++  if (auto angle = ConfiguredOrientationAngle()) {
++    return *angle;
++  }
++
+   uint16_t angle = static_cast<uint16_t>(bc->GetCurrentOrientationAngle());
+   if (nsContentUtils::ShouldResistFingerprinting(
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
+diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
+index d27c51aa5a..5d6293a5ac 100644
+--- a/dom/base/nsScreen.cpp
++++ b/dom/base/nsScreen.cpp
+@@ -215,6 +215,11 @@ bool nsScreen::IsFullscreen() const {
+ }
+ 
+ uint16_t nsScreen::GetOrientationAngle() const {
++  // Camoufox: the configured angle (see ScreenOrientation.cpp); this is what
++  // window.orientation reads.
++  if (auto angle = MaskConfig::GetUint32("screen.orientation.angle")) {
++    return static_cast<uint16_t>(*angle % 360);
++  }
+   nsDeviceContext* context = GetDeviceContext();
+   if (context) {
+     return context->GetScreenOrientationAngle();
+diff --git a/layout/style/GeckoBindings.cpp b/layout/style/GeckoBindings.cpp
+index ee784cef62..674d748a6e 100644
+--- a/layout/style/GeckoBindings.cpp
++++ b/layout/style/GeckoBindings.cpp
+@@ -6,6 +6,8 @@
+ 
+ #include "mozilla/GeckoBindings.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "AnchorPositioningUtils.h"
+ #include "ChildIterator.h"
+ #include "ErrorReporter.h"
+@@ -1780,6 +1782,17 @@ bool Gecko_AssertClassAttrValueIsSane(const nsAttrValue* aValue) {
+ void Gecko_GetSafeAreaInsets(const nsPresContext* aPresContext, float* aTop,
+                              float* aRight, float* aBottom, float* aLeft) {
+   MOZ_ASSERT(aPresContext);
++  // Camoufox: the emulated display's insets, in CSS pixels, for
++  // env(safe-area-inset-*). A desktop window has none; a phone has the status
++  // and gesture bars.
++  if (auto top = MaskConfig::GetDouble("screen.safeAreaInsetTop")) {
++    *aTop = float(*top);
++    *aRight = float(MaskConfig::GetDouble("screen.safeAreaInsetRight").value_or(0));
++    *aBottom =
++        float(MaskConfig::GetDouble("screen.safeAreaInsetBottom").value_or(0));
++    *aLeft = float(MaskConfig::GetDouble("screen.safeAreaInsetLeft").value_or(0));
++    return;
++  }
+   const CSSMargin insets =
+       LayoutDeviceMargin(aPresContext->GetSafeAreaInsets()) /
+       aPresContext->CSSToDevPixelScale();
+diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
+index fc31f45c65..49246751e1 100644
+--- a/layout/style/nsMediaFeatures.cpp
++++ b/layout/style/nsMediaFeatures.cpp
+@@ -230,6 +230,16 @@ float Gecko_MediaFeatures_GetResolution(const Document* aDocument) {
+     return pc->GetOverrideDPPX();
+   }
+ 
++  // Camoufox: an emulated phone reports its configured devicePixelRatio here
++  // too, so `(resolution: 2.625dppx)` agrees with window.devicePixelRatio.
++  // Firefox cannot render at 2.625 exactly (app units are integers), so this
++  // has to come from the config rather than from the pres context.
++  if (MaskConfig::IsAndroidDevice()) {
++    if (auto dpr = MaskConfig::GetDouble("window.devicePixelRatio")) {
++      return float(*dpr);
++    }
++  }
++
+   if (aDocument->ShouldResistFingerprinting(RFPTarget::CSSResolution)) {
+     return float(nsRFPService::GetDevicePixelRatioAtZoom(pc->GetFullZoom()));
+   }

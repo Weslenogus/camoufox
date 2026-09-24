@@ -1,0 +1,74 @@
+diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
+index 5424458c26..99aac18e54 100644
+--- a/dom/base/AndroidDevice.cpp
++++ b/dom/base/AndroidDevice.cpp
+@@ -3,6 +3,8 @@
+ #include "mozilla/dom/AndroidDevice.h"
+ 
+ #include "MaskConfig.hpp"
++#include "nsContentUtils.h"
++#include "nsIPrincipal.h"
+ 
+ namespace mozilla::dom {
+ 
+@@ -26,4 +28,14 @@ bool AndroidDevice::HasDeviceMemory(JSContext*, JSObject*) {
+ /* static */
+ bool AndroidDevice::Exposed(JSContext*, JSObject*) { return IsEmulated(); }
+ 
++/* static */
++bool AndroidDevice::HasBatteryAPI(JSContext*, JSObject* aGlobal) {
++  // What ChromeOnly checked: a system-principal global.
++  if (nsIPrincipal* principal = nsContentUtils::ObjectPrincipal(aGlobal);
++      principal && principal->IsSystemPrincipal()) {
++    return true;
++  }
++  return IsEmulated();
++}
++
+ }  // namespace mozilla::dom
+diff --git a/dom/base/AndroidDevice.h b/dom/base/AndroidDevice.h
+index 48fc3f4a81..8fa3ad316b 100644
+--- a/dom/base/AndroidDevice.h
++++ b/dom/base/AndroidDevice.h
+@@ -27,6 +27,9 @@ class AndroidDevice {
+   // For an API only Chrome on Android has (Web NFC, the Contact Picker,
+   // window.orientation). Secure-context requirements stay in the IDL.
+   static bool Exposed(JSContext*, JSObject*);
++  // Firefox keeps the Battery Status API for its own UI; Chrome on Android
++  // exposes it to secure pages.
++  static bool HasBatteryAPI(JSContext*, JSObject* aGlobal);
+ };
+ 
+ }  // namespace mozilla::dom
+diff --git a/dom/webidl/BatteryManager.webidl b/dom/webidl/BatteryManager.webidl
+index 1cc806360a..784b03ad11 100644
+--- a/dom/webidl/BatteryManager.webidl
++++ b/dom/webidl/BatteryManager.webidl
+@@ -9,7 +9,10 @@
+  * liability, trademark and document use rules apply.
+  */
+ 
+-[ChromeOnly, Exposed=Window]
++// Camoufox: ChromeOnly, except on an emulated Android device (see
++// Navigator.getBattery).
++[Func="mozilla::dom::AndroidDevice::HasBatteryAPI", SecureContext,
++ Exposed=Window]
+ interface BatteryManager : EventTarget {
+     readonly attribute boolean             charging;
+     readonly attribute unrestricted double chargingTime;
+diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
+index a15c51d7ba..d96cdfc9d0 100644
+--- a/dom/webidl/Navigator.webidl
++++ b/dom/webidl/Navigator.webidl
+@@ -134,7 +134,10 @@ Navigator includes NavigatorGeolocation;
+ // http://www.w3.org/TR/battery-status/#navigatorbattery-interface
+ partial interface Navigator {
+   // ChromeOnly to prevent web content from fingerprinting users' batteries.
+-  [Throws, ChromeOnly, Pref="dom.battery.enabled"]
++  // Camoufox: also exposed to secure pages on an emulated Android device,
++  // where Chrome has it (AndroidDevice::HasBatteryAPI).
++  [Throws, SecureContext, Pref="dom.battery.enabled",
++   Func="mozilla::dom::AndroidDevice::HasBatteryAPI"]
+   Promise<BatteryManager> getBattery();
+ };
+ 

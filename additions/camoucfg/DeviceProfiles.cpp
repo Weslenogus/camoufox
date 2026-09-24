@@ -1,0 +1,434 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+// The profile tables live in this one translation unit, not in the header, so
+// adjusting a profile rebuilds one file rather than every MaskConfig reader.
+
+#include "DeviceProfiles.hpp"
+
+#include "mozilla/glue/Debug.h"
+
+#include <string>
+
+namespace MaskConfig {
+namespace DeviceProfiles {
+
+// Google Pixel 10, Android 17, current stable Chrome, arm64.
+//
+// Each Android behaviour lands with the change that implements it, and adds
+// the keys it reads here at the same time, so this table only ever describes
+// what the browser actually does.
+static nlohmann::json Pixel10() {
+  nlohmann::json p = nlohmann::json::object();
+
+  // Android-family behaviour that is not a single spoofed value: which APIs
+  // exist, how input and sensors behave, which platform defaults apply.
+  // Everything gated on "this is an Android device" reads this one key.
+  p["device:android"] = true;
+
+  // Tensor G5 is arm64: NaNs created by arithmetic carry ARM's default NaN
+  // bit pattern (0x7FC00000), not x86's 0xFFC00000.
+  p["cpu:armDefaultNaN"] = true;
+
+  // Page code called by automation sees no automation frames in its stacks.
+  p["automation:hideStackFrames"] = true;
+
+  // Tensor G5: 8 cores (1 + 5 + 2), 12 GB of RAM. Chrome reports
+  // deviceMemory rounded down to a power of two and capped at 8.
+  p["navigator.platform"] = "Linux aarch64";
+  p["navigator.hardwareConcurrency"] = 8;
+  p["navigator.deviceMemory"] = 8;
+  p["navigator.maxTouchPoints"] = 5;
+  p["navigator.vendor"] = "Google Inc.";
+
+  // Chrome's reduced user agent on Android: the model and real Android
+  // version never appear ("Android 10; K" is fixed); the minor version is
+  // always 0.0.0. Every request, and every realm's navigator, carries it.
+  const char* kUserAgent =
+      "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like "
+      "Gecko) Chrome/155.0.0.0 Mobile Safari/537.36";
+  p["navigator.userAgent"] = kUserAgent;
+  p["headers.User-Agent"] = kUserAgent;
+  p["navigator.appVersion"] = std::string(kUserAgent).substr(8);
+  p["navigator.appName"] = "Netscape";
+  p["navigator.appCodeName"] = "Mozilla";
+  p["navigator.product"] = "Gecko";
+  p["navigator.productSub"] = "20030107";
+  p["headers.Accept-Language"] = "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
+  // French first, then English, in every realm (the accept-languages list
+  // navigator.languages reads in windows and workers alike), and a fr-FR
+  // Intl locale.
+  p["locale:all"] = "fr-FR, fr, en-US, en";
+  p["locale:language"] = "fr";
+  p["locale:region"] = "FR";
+  p["navigator.language"] = "fr-FR";
+  p["navigator.languages"] = nlohmann::json::array({"fr-FR", "fr", "en-US", "en"});
+
+  // navigator.connection: on wifi, Chrome's quality estimates of a good
+  // connection.
+  p["navigator.connection.type"] = "wifi";
+  p["navigator.connection.effectiveType"] = "4g";
+  p["navigator.connection.downlink"] = 10.0;
+  p["navigator.connection.rtt"] = 50;
+  p["navigator.connection.saveData"] = false;
+
+  // User-Agent Client Hints of Chrome 155 on Android (155.0.8059.16, the
+  // current Android release). Brands follow Chromium's GREASE algorithm for
+  // major version 155: order {2, 1, 0}, "Not(A:Brand" version 24.
+  // architecture and bitness are empty on a phone: Chrome only fills them in
+  // for desktop and XR form factors.
+  p["userAgentData:brands"] = nlohmann::json::array({
+      {{"brand", "Google Chrome"}, {"version", "155"}},
+      {{"brand", "Chromium"}, {"version", "155"}},
+      {{"brand", "Not(A:Brand"}, {"version", "24"}},
+  });
+  p["userAgentData:fullVersionList"] = nlohmann::json::array({
+      {{"brand", "Google Chrome"}, {"version", "155.0.8059.16"}},
+      {{"brand", "Chromium"}, {"version", "155.0.8059.16"}},
+      {{"brand", "Not(A:Brand"}, {"version", "24.0.0.0"}},
+  });
+  p["userAgentData:uaFullVersion"] = "155.0.8059.16";
+  p["userAgentData:mobile"] = true;
+  p["userAgentData:platform"] = "Android";
+  p["userAgentData:platformVersion"] = "17.0.0";
+  p["userAgentData:model"] = "Pixel 10";
+  p["userAgentData:architecture"] = "";
+  p["userAgentData:bitness"] = "";
+  p["userAgentData:wow64"] = false;
+  p["userAgentData:formFactors"] = nlohmann::json::array({"Mobile"});
+  p["clientHints:sendHighEntropy"] = true;
+
+  // WebGL as Chrome reports it on the Pixel 10's GPU, the PowerVR D-Series
+  // DXT-48-1536 in Tensor G5. The extension lists are Chrome on Android's,
+  // less the ones Gecko does not implement (a listed extension must be
+  // obtainable). ASTC is emulated where the host GPU lacks it; S3TC, a
+  // desktop format, is not offered. mediump is fp16: 15/15/10.
+  p["webGl:vendor"] = "Imagination Technologies";
+  p["webGl:renderer"] = "PowerVR D-Series DXT-48-1536";
+  p["webGl:emulateAstc"] = true;
+  // ...and mediump arithmetic in fragment shaders runs at fp16 too.
+  p["webGl:emulateMediumpPrecision"] = true;
+  p["webGl:astcProfiles"] = nlohmann::json::array({"ldr"});
+  p["webGl:supportedExtensions"] = nlohmann::json::array({
+      "ANGLE_instanced_arrays", "EXT_blend_minmax",
+      "EXT_color_buffer_half_float", "EXT_depth_clamp", "EXT_float_blend",
+      "EXT_frag_depth", "EXT_shader_texture_lod", "EXT_sRGB",
+      "EXT_texture_filter_anisotropic", "OES_element_index_uint",
+      "OES_fbo_render_mipmap", "OES_standard_derivatives", "OES_texture_float",
+      "OES_texture_float_linear", "OES_texture_half_float",
+      "OES_texture_half_float_linear", "OES_vertex_array_object",
+      "WEBGL_color_buffer_float", "WEBGL_compressed_texture_astc",
+      "WEBGL_compressed_texture_etc", "WEBGL_compressed_texture_etc1",
+      "WEBGL_debug_renderer_info", "WEBGL_debug_shaders",
+      "WEBGL_depth_texture", "WEBGL_draw_buffers", "WEBGL_lose_context",
+  });
+  p["webGl2:supportedExtensions"] = nlohmann::json::array({
+      "EXT_color_buffer_float", "EXT_color_buffer_half_float",
+      "EXT_depth_clamp", "EXT_float_blend", "EXT_texture_filter_anisotropic",
+      "EXT_texture_norm16", "OES_draw_buffers_indexed",
+      "OES_texture_float_linear", "WEBGL_compressed_texture_astc",
+      "WEBGL_compressed_texture_etc", "WEBGL_compressed_texture_etc1",
+      "WEBGL_debug_renderer_info", "WEBGL_debug_shaders", "WEBGL_lose_context",
+      "WEBGL_provoking_vertex",
+  });
+  {
+    // "shaderType,precisionType": FRAGMENT 35632 / VERTEX 35633 x
+    // LOW/MEDIUM/HIGH_FLOAT 36336-36338, LOW/MEDIUM/HIGH_INT 36339-36341.
+    nlohmann::json formats = nlohmann::json::object();
+    for (const char* shader : {"35632", "35633"}) {
+      auto set = [&](const char* type, int lo, int hi, int precision) {
+        formats[std::string(shader) + "," + type] = {
+            {"rangeMin", lo}, {"rangeMax", hi}, {"precision", precision}};
+      };
+      set("36336", 15, 15, 10);
+      set("36337", 15, 15, 10);
+      set("36338", 127, 127, 23);
+      set("36339", 15, 15, 0);
+      set("36340", 15, 15, 0);
+      set("36341", 31, 30, 0);
+    }
+    p["webGl:shaderPrecisionFormats"] = formats;
+    p["webGl2:shaderPrecisionFormats"] = formats;
+  }
+  p["webGl:parameters"] = {
+      {"7936", "WebKit"},
+      {"7937", "WebKit WebGL"},
+      {"7938", "WebGL 1.0 (OpenGL ES 2.0 Chromium)"},
+      {"35724", "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"},
+  };
+  p["webGl2:parameters"] = {
+      {"7936", "WebKit"},
+      {"7937", "WebKit WebGL"},
+      {"7938", "WebGL 2.0 (OpenGL ES 3.0 Chromium)"},
+      {"35724", "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"},
+  };
+
+  // WebGPU as Chrome reports it on the Pixel 10 (a real device's WebGPU
+  // report: PowerVR "img-tec" / "d-series", Vulkan backend).
+  p["webGpu:vendor"] = "img-tec";
+  p["webGpu:architecture"] = "d-series";
+  p["webGpu:device"] = "";
+  p["webGpu:description"] = "";
+  p["webGpu:subgroupMinSize"] = 4;
+  p["webGpu:subgroupMaxSize"] = 128;
+  p["webGpu:isFallbackAdapter"] = false;
+  p["webGpu:features"] = nlohmann::json::array({
+      "clip-distances", "core-features-and-limits", "depth-clip-control",
+      "depth32float-stencil8", "dual-source-blending", "float32-blendable",
+      "indirect-first-instance", "primitive-index",
+      "rg11b10ufloat-renderable", "shader-f16", "subgroups",
+      "texture-component-swizzle", "texture-compression-astc",
+      "texture-compression-etc2", "texture-formats-tier1",
+      "texture-formats-tier2", "timestamp-query",
+  });
+  p["webGpu:limits"] = {
+      {"maxTextureDimension1D", 16384},
+      {"maxTextureDimension2D", 16384},
+      {"maxTextureDimension3D", 2048},
+      {"maxTextureArrayLayers", 2048},
+      {"maxBindGroups", 4},
+      {"maxBindGroupsPlusVertexBuffers", 24},
+      {"maxBindingsPerBindGroup", 1000},
+      {"maxDynamicUniformBuffersPerPipelineLayout", 10},
+      {"maxDynamicStorageBuffersPerPipelineLayout", 8},
+      {"maxSampledTexturesPerShaderStage", 16},
+      {"maxSamplersPerShaderStage", 16},
+      {"maxStorageBuffersInVertexStage", 10},
+      {"maxStorageBuffersInFragmentStage", 10},
+      {"maxStorageBuffersPerShaderStage", 10},
+      {"maxStorageTexturesInVertexStage", 8},
+      {"maxStorageTexturesInFragmentStage", 8},
+      {"maxStorageTexturesPerShaderStage", 8},
+      {"maxUniformBuffersPerShaderStage", 12},
+      {"maxUniformBufferBindingSize", 65536},
+      {"maxStorageBufferBindingSize", 134217728},
+      {"minUniformBufferOffsetAlignment", 256},
+      {"minStorageBufferOffsetAlignment", 256},
+      {"maxVertexBuffers", 8},
+      {"maxBufferSize", 2147483648ULL},
+      {"maxVertexAttributes", 16},
+      {"maxVertexBufferArrayStride", 2048},
+      {"maxInterStageShaderVariables", 28},
+      {"maxColorAttachments", 8},
+      {"maxColorAttachmentBytesPerSample", 128},
+      {"maxComputeWorkgroupStorageSize", 32768},
+      {"maxComputeInvocationsPerWorkgroup", 1024},
+      {"maxComputeWorkgroupSizeX", 1024},
+      {"maxComputeWorkgroupSizeY", 1024},
+      {"maxComputeWorkgroupSizeZ", 64},
+      {"maxComputeWorkgroupsPerDimension", 65535},
+  };
+
+  // Capture devices, as Chrome enumerates them on a Pixel: the Camera2
+  // devices in descending id order (front first), each with its capture
+  // formats and Image Capture controls. Sizes are the sensors' largest
+  // YUV outputs.
+  p["mediaDevices:cameras"] = nlohmann::json::array({
+      {{"label", "camera2 1, facing front"},
+       {"facingMode", "user"},
+       {"width", 3648},
+       {"height", 2736},
+       {"frameRate", 30},
+       {"focusMode", {"continuous", "single-shot", "manual"}},
+       {"exposureMode", {"continuous", "manual"}}},
+      {{"label", "camera2 0, facing back"},
+       {"facingMode", "environment"},
+       {"width", 4080},
+       {"height", 3072},
+       {"frameRate", 30},
+       {"zoom", {{"min", 1}, {"max", 8}, {"step", 0.1}}},
+       {"torch", true},
+       {"focusMode", {"continuous", "single-shot", "manual"}},
+       {"exposureMode", {"continuous", "manual"}}},
+  });
+
+  // Screen: 1080x2424 physical at DPR 2.625 is 412x915 CSS px; the status
+  // bar and gesture navigation take 42 px, leaving 412x873 for the page.
+  // Portrait-primary, 24 px safe-area insets top and bottom.
+  p["screen.width"] = 412;
+  p["screen.height"] = 915;
+  p["screen.availWidth"] = 412;
+  p["screen.availHeight"] = 873;
+  p["screen.availTop"] = 0;
+  p["screen.availLeft"] = 0;
+  p["screen.colorDepth"] = 24;
+  p["screen.pixelDepth"] = 24;
+  p["window.devicePixelRatio"] = 2.625;
+  p["window.innerWidth"] = 412;
+  p["window.innerHeight"] = 873;
+  p["window.outerWidth"] = 412;
+  p["window.outerHeight"] = 915;
+  p["window.screenX"] = 0;
+  p["window.screenY"] = 0;
+  p["screen.orientation.type"] = "portrait-primary";
+  p["screen.orientation.angle"] = 0;
+  p["screen.safeAreaInsetTop"] = 24;
+  p["screen.safeAreaInsetBottom"] = 24;
+  p["screen.safeAreaInsetLeft"] = 0;
+  p["screen.safeAreaInsetRight"] = 0;
+
+  // Hardware video decode (H.264, VP9, AV1) is smooth and power efficient up
+  // to 1080p30 on Tensor G5.
+  p["mediaCapabilities:maxWidth"] = 1920;
+  p["mediaCapabilities:maxHeight"] = 1080;
+  p["mediaCapabilities:maxFramerate"] = 30;
+
+  // Web Audio at the phone's 48 kHz, with Chrome on Android's latencies:
+  // 256 frames of base latency, 1024 of output latency.
+  p["AudioContext:sampleRate"] = 48000;
+  p["AudioContext:baseLatency"] = 0.005333;
+  p["AudioContext:outputLatency"] = 0.021333;
+  p["AudioContext:maxChannelCount"] = 2;
+
+  // navigator.storage.estimate(): the quota Chrome grants an origin on the
+  // phone, and a fresh origin's baseline usage.
+  p["storage:quota"] = 34359738368ULL;
+  p["storage:usageBase"] = 24576000ULL;
+
+  // performance.memory: the JS heap limit Chrome reports on the phone.
+  p["performance.memory.jsHeapSizeLimit"] = 2147483648ULL;
+
+  // speechSynthesis: Google's network voices only -- never a host voice --
+  // with US English the default. speak() completes without audio output.
+  {
+    auto voice = [](const char* aName, const char* aLang, bool aDefault) {
+      return nlohmann::json{{"name", aName},
+                            {"voiceURI", aName},
+                            {"lang", aLang},
+                            {"isLocalService", false},
+                            {"isDefault", aDefault}};
+    };
+    p["voices"] = nlohmann::json::array({
+        voice("Google fran\u00e7ais", "fr-FR", false),
+        voice("Google US English", "en-US", true),
+        voice("Google UK English Female", "en-GB", false),
+        voice("Google espa\u00f1ol", "es-ES", false),
+    });
+  }
+  p["voices:blockIfNotDefined"] = true;
+  p["voices:fakeCompletion"] = true;
+
+  // Battery: 78%, on battery, four hours left (chargingTime is then
+  // Infinity, as the Battery Status API specifies).
+  p["battery:level"] = 0.78;
+  p["battery:charging"] = false;
+  p["battery:dischargingTime"] = 14400.0;
+
+  // Platform defaults that Gecko keys on prefs. Chrome on Android has no
+  // Document Picture-in-Picture (the rest of the desktop-only APIs --
+  // EyeDropper, WebHID, Window Management, Local Font Access, Window Controls
+  // Overlay, File System Access pickers, Keyboard Map -- Firefox never had).
+  p["device:prefs"] = {
+      {"dom.documentpip.enabled", false},
+      // Android builds keep the legacy touch APIs ('ontouchstart' in window,
+      // document.createTouch), as Chrome on Android does.
+      {"dom.w3c_touch_events.legacy_apis.enabled", true},
+      // Android's generic families (browser/fonts/android): unstyled text is
+      // sans-serif, as in Chrome on Android; emoji are Noto Color Emoji.
+      {"font.default.x-western", "sans-serif"},
+      {"font.default.x-unicode", "sans-serif"},
+      {"font.default.x-cyrillic", "sans-serif"},
+      {"font.default.el", "sans-serif"},
+      {"font.name.sans-serif.x-western", "Roboto"},
+      {"font.name.sans-serif.x-unicode", "Roboto"},
+      {"font.name.sans-serif.x-cyrillic", "Roboto"},
+      {"font.name.sans-serif.el", "Roboto"},
+      {"font.name.serif.x-western", "Noto Serif"},
+      {"font.name.serif.x-unicode", "Noto Serif"},
+      {"font.name.serif.x-cyrillic", "Noto Serif"},
+      {"font.name.serif.el", "Noto Serif"},
+      {"font.name.monospace.x-western", "Droid Sans Mono"},
+      {"font.name.monospace.x-unicode", "Droid Sans Mono"},
+      {"font.name.monospace.x-cyrillic", "Droid Sans Mono"},
+      {"font.name.monospace.el", "Droid Sans Mono"},
+      {"font.name-list.emoji", "Noto Color Emoji"},
+      // Text is laid out at fractional advances, as on Android.
+      {"gfx.text.subpixel-position.force-enabled", true},
+      // No LCD (subpixel) text antialiasing on a phone: ClearType level 0 is
+      // grayscale on Windows builds (fontconfig builds drop the subpixel
+      // order from the font pattern instead).
+      {"gfx.font_rendering.cleartype_params.cleartype_level", 0},
+      // WebGPU ships in Chrome on Android, in windows and every worker; a
+      // phone always has it, so the host's GPU blocklist is not consulted.
+      // Chrome's Accept headers for documents and images (scripts, styles
+      // and fetches already match).
+      {"network.http.accept",
+       "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+       "image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;"
+       "q=0.7"},
+      {"image.http.accept",
+       "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
+      // performance.now() at 1 ms resolution in every realm.
+      {"privacy.reduceTimerPrecision", true},
+      {"privacy.resistFingerprinting.reduceTimerPrecision.microseconds", 1000},
+      // Canvas pixels are exact and reproducible, as Chrome's are: none of
+      // Gecko's fingerprinting-protection randomization, in normal or private
+      // windows, and no remotely delivered overrides turning it back on.
+      {"privacy.fingerprintingProtection", false},
+      {"privacy.fingerprintingProtection.pbmode", false},
+      {"privacy.fingerprintingProtection.remoteOverrides.enabled", false},
+      {"privacy.resistFingerprinting.pbmode", false},
+      // HTMLVideoElement.requestVideoFrameCallback, native.
+      {"media.rvfc.enabled", true},
+      // NetworkInformation (navigator.connection), in windows and workers.
+      {"dom.netinfo.enabled", true},
+      {"dom.webgpu.enabled", true},
+      {"dom.webgpu.service-workers.enabled", true},
+      {"gfx.webgpu.ignore-blocklist", true},
+  };
+  // Only Android's fonts are visible: desktop families (Arial, Helvetica,
+  // DejaVu...) and Apple's -apple-system / BlinkMacSystemFont do not resolve.
+  p["fonts"] = nlohmann::json::array(
+      {"Roboto", "Noto Serif", "Droid Sans Mono", "Noto Color Emoji"});
+
+  return p;
+}
+
+nlohmann::json Lookup(const std::string& name) {
+  nlohmann::json profile;
+  if (name == "pixel10") {
+    profile = Pixel10();
+  } else {
+    return nullptr;
+  }
+  // Round-trip through the parser so every value is typed exactly as the
+  // same value written in CAMOU_CONFIG would be: a non-negative integer
+  // literal in C++ is a signed JSON number, but parses as an unsigned one,
+  // and MaskConfig::GetUint32 accepts only the latter.
+  return nlohmann::json::parse(profile.dump());
+}
+
+bool Expand(nlohmann::json& config) {
+  if (!config.is_object()) {
+    return false;
+  }
+  auto selected = config.find("device:profile");
+  if (selected == config.end()) {
+    return false;
+  }
+  if (!selected->is_string()) {
+    printf_stderr("ERROR: 'device:profile' must be a string\n");
+    return false;
+  }
+
+  const std::string name = selected->get<std::string>();
+  nlohmann::json profile = Lookup(name);
+  if (profile.is_null()) {
+    // Loud, because the alternative is a desktop fingerprint the caller
+    // believes is a phone.
+    printf_stderr("ERROR: unknown device:profile '%s'; no profile applied\n",
+                  name.c_str());
+    return false;
+  }
+
+  for (auto& [key, value] : profile.items()) {
+    if (!config.contains(key)) {
+      config[key] = value;
+    }
+  }
+  return true;
+}
+
+}  // namespace DeviceProfiles
+}  // namespace MaskConfig

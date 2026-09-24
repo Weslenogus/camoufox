@@ -1,0 +1,1123 @@
+diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
+index 54c92a279a..5424458c26 100644
+--- a/dom/base/AndroidDevice.cpp
++++ b/dom/base/AndroidDevice.cpp
+@@ -23,4 +23,7 @@ bool AndroidDevice::HasDeviceMemory(JSContext*, JSObject*) {
+   return DeviceMemory().has_value();
+ }
+ 
++/* static */
++bool AndroidDevice::Exposed(JSContext*, JSObject*) { return IsEmulated(); }
++
+ }  // namespace mozilla::dom
+diff --git a/dom/base/AndroidDevice.h b/dom/base/AndroidDevice.h
+index f9629db4b1..48fc3f4a81 100644
+--- a/dom/base/AndroidDevice.h
++++ b/dom/base/AndroidDevice.h
+@@ -24,6 +24,9 @@ class AndroidDevice {
+   // WebIDL Func= gates. They take (JSContext*, JSObject*) so that they work
+   // for Window- and Worker-exposed members alike.
+   static bool HasDeviceMemory(JSContext*, JSObject*);
++  // For an API only Chrome on Android has (Web NFC, the Contact Picker,
++  // window.orientation). Secure-context requirements stay in the IDL.
++  static bool Exposed(JSContext*, JSObject*);
+ };
+ 
+ }  // namespace mozilla::dom
+diff --git a/dom/base/ContactsManager.cpp b/dom/base/ContactsManager.cpp
+new file mode 100644
+index 0000000000..0abc96d3ed
+--- /dev/null
++++ b/dom/base/ContactsManager.cpp
+@@ -0,0 +1,90 @@
++/* Camoufox: navigator.contacts for an emulated Android device. See
++ * ContactsManager.h. */
++#include "mozilla/dom/ContactsManager.h"
++
++#include "mozilla/dom/BrowsingContext.h"
++#include "mozilla/dom/ContactsManagerBinding.h"
++#include "mozilla/dom/Promise.h"
++#include "mozilla/dom/WindowContext.h"
++#include "nsPIDOMWindow.h"
++
++namespace mozilla::dom {
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ContactsManager, mGlobal)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(ContactsManager)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(ContactsManager)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(ContactsManager)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ContactAddress, mGlobal)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(ContactAddress)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(ContactAddress)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(ContactAddress)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++JSObject* ContactsManager::WrapObject(JSContext* aCx,
++                                      JS::Handle<JSObject*> aGivenProto) {
++  return ContactsManager_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++JSObject* ContactAddress::WrapObject(JSContext* aCx,
++                                     JS::Handle<JSObject*> aGivenProto) {
++  return ContactAddress_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++already_AddRefed<Promise> ContactsManager::GetProperties(ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed()) {
++    return nullptr;
++  }
++  // Chrome on Android supports every property.
++  nsTArray<ContactProperty> properties = {
++      ContactProperty::Address, ContactProperty::Email, ContactProperty::Icon,
++      ContactProperty::Name, ContactProperty::Tel};
++  promise->MaybeResolve(properties);
++  return promise.forget();
++}
++
++already_AddRefed<Promise> ContactsManager::Select(
++    const Sequence<ContactProperty>& aProperties,
++    const ContactsSelectOptions& aOptions, ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed()) {
++    return nullptr;
++  }
++
++  // Chrome's checks, in Chrome's order (contacts_manager.cc).
++  nsCOMPtr<nsPIDOMWindowInner> window = do_QueryInterface(mGlobal);
++  BrowsingContext* bc = window ? window->GetBrowsingContext() : nullptr;
++  if (!bc || !bc->IsTop()) {
++    promise->MaybeRejectWithInvalidStateError(
++        "The contacts API can only be used in the top frame");
++    return promise.forget();
++  }
++  WindowContext* wc = window->GetWindowContext();
++  if (!wc || !wc->HasValidTransientUserGestureActivation()) {
++    promise->MaybeRejectWithSecurityError(
++        "A user gesture is required to call this method");
++    return promise.forget();
++  }
++  if (aProperties.IsEmpty()) {
++    promise->MaybeRejectWithTypeError("At least one property must be provided");
++    return promise.forget();
++  }
++  if (mPickerInUse) {
++    promise->MaybeRejectWithInvalidStateError(
++        "Contacts Picker is already in use.");
++    return promise.forget();
++  }
++
++  // The picker opened and was dismissed: no contacts.
++  wc->ConsumeTransientUserGestureActivation();
++  promise->MaybeResolve(nsTArray<nsString>());
++  return promise.forget();
++}
++
++}  // namespace mozilla::dom
+diff --git a/dom/base/ContactsManager.h b/dom/base/ContactsManager.h
+new file mode 100644
+index 0000000000..ff0f807b7e
+--- /dev/null
++++ b/dom/base/ContactsManager.h
+@@ -0,0 +1,82 @@
++/* Camoufox: the Contact Picker API (navigator.contacts) for an emulated
++ * Android device.
++ *
++ * Only Chrome on Android has it. There is no address book here: the API has
++ * Chrome's shape and argument checks, and select() ends the way it does when
++ * the user dismisses the picker -- with no contacts. */
++#ifndef mozilla_dom_ContactsManager_h
++#define mozilla_dom_ContactsManager_h
++
++#include "mozilla/dom/BindingDeclarations.h"
++#include "nsCOMPtr.h"
++#include "nsCycleCollectionParticipant.h"
++#include "nsIGlobalObject.h"
++#include "nsTArray.h"
++#include "nsWrapperCache.h"
++
++namespace mozilla {
++class ErrorResult;
++
++namespace dom {
++
++class Promise;
++enum class ContactProperty : uint8_t;
++struct ContactsSelectOptions;
++
++class ContactsManager final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(ContactsManager)
++
++  explicit ContactsManager(nsIGlobalObject* aGlobal) : mGlobal(aGlobal) {}
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  already_AddRefed<Promise> GetProperties(ErrorResult& aRv);
++  already_AddRefed<Promise> Select(const Sequence<ContactProperty>& aProperties,
++                                   const ContactsSelectOptions& aOptions,
++                                   ErrorResult& aRv);
++
++ private:
++  ~ContactsManager() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  bool mPickerInUse = false;
++};
++
++// Never created: select() returns no contacts. It exists so that the
++// interface is there to be found, as in Chrome.
++class ContactAddress final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(ContactAddress)
++
++  explicit ContactAddress(nsIGlobalObject* aGlobal) : mGlobal(aGlobal) {}
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetCity(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetCountry(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetDependentLocality(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetOrganization(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetPhone(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetPostalCode(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetRecipient(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetRegion(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetSortingCode(nsAString& aRetVal) const { aRetVal.Truncate(); }
++  void GetAddressLine(nsTArray<nsString>& aRetVal) const { aRetVal.Clear(); }
++
++ private:
++  ~ContactAddress() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_ContactsManager_h
+diff --git a/dom/base/NDEFReader.cpp b/dom/base/NDEFReader.cpp
+new file mode 100644
+index 0000000000..4b12bfe95d
+--- /dev/null
++++ b/dom/base/NDEFReader.cpp
+@@ -0,0 +1,345 @@
++/* Camoufox: Web NFC for an emulated Android device. See NDEFReader.h. */
++#include "mozilla/dom/NDEFReader.h"
++
++#include "js/ArrayBuffer.h"
++#include "js/experimental/TypedData.h"
++#include "mozilla/dom/AbortSignal.h"
++#include "mozilla/dom/NDEFReaderBinding.h"
++#include "mozilla/dom/Promise.h"
++#include "mozilla/dom/RootedDictionary.h"
++#include "mozilla/dom/TypedArray.h"
++#include "nsAtom.h"
++#include "nsJSUtils.h"
++
++namespace mozilla::dom {
++
++// ---------------------------------------------------------------------------
++// NDEFRecord
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(NDEFRecord, mGlobal, mRecords)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(NDEFRecord)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(NDEFRecord)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(NDEFRecord)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++NDEFRecord::NDEFRecord(nsIGlobalObject* aGlobal) : mGlobal(aGlobal) {
++  mMediaType.SetIsVoid(true);
++  mId.SetIsVoid(true);
++  mEncoding.SetIsVoid(true);
++  mLang.SetIsVoid(true);
++}
++
++JSObject* NDEFRecord::WrapObject(JSContext* aCx,
++                                 JS::Handle<JSObject*> aGivenProto) {
++  return NDEFRecord_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++// Copies the bytes of an ArrayBuffer or ArrayBufferView. False if `aValue` is
++// neither.
++static bool AppendBufferSource(JSContext* aCx, JS::Handle<JS::Value> aValue,
++                               nsTArray<uint8_t>& aOut) {
++  if (!aValue.isObject()) {
++    return false;
++  }
++  JS::Rooted<JSObject*> obj(aCx, &aValue.toObject());
++  if (JS::IsArrayBufferObject(obj)) {
++    RootedSpiderMonkeyInterface<ArrayBuffer> buffer(aCx);
++    return buffer.Init(obj) && buffer.AppendDataTo(aOut);
++  }
++  if (JS_IsArrayBufferViewObject(obj)) {
++    RootedSpiderMonkeyInterface<ArrayBufferView> view(aCx);
++    return view.Init(obj) && view.AppendDataTo(aOut);
++  }
++  return false;
++}
++
++/* static */
++already_AddRefed<NDEFRecord> NDEFRecord::Constructor(
++    const GlobalObject& aGlobal, const NDEFRecordInit& aInit,
++    ErrorResult& aRv) {
++  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
++  return Create(global, aGlobal.Context(), aInit, aRv);
++}
++
++/* static */
++already_AddRefed<NDEFRecord> NDEFRecord::Create(nsIGlobalObject* aGlobal,
++                                                JSContext* aCx,
++                                                const NDEFRecordInit& aInit,
++                                                ErrorResult& aRv) {
++  RefPtr<NDEFRecord> record = new NDEFRecord(aGlobal);
++  record->mRecordType = aInit.mRecordType;
++  if (record->mRecordType.IsEmpty()) {
++    aRv.ThrowTypeError("The record type is not valid.");
++    return nullptr;
++  }
++  if (aInit.mMediaType.WasPassed()) {
++    record->mMediaType = aInit.mMediaType.Value();
++  }
++  if (aInit.mId.WasPassed()) {
++    record->mId = aInit.mId.Value();
++  }
++
++  JS::Rooted<JS::Value> data(aCx, aInit.mData);
++  const nsString& type = record->mRecordType;
++
++  if (type.EqualsLiteral("empty")) {
++    if (!data.isUndefined()) {
++      aRv.ThrowTypeError("An 'empty' record cannot carry data.");
++      return nullptr;
++    }
++    return record.forget();
++  }
++
++  if (data.isUndefined()) {
++    aRv.ThrowTypeError("The record data is missing.");
++    return nullptr;
++  }
++
++  if (data.isString()) {
++    nsAutoJSString text;
++    if (!text.init(aCx, data)) {
++      aRv.NoteJSContextException(aCx);
++      return nullptr;
++    }
++    const NS_ConvertUTF16toUTF8 utf8(text);
++    record->mData.AppendElements(
++        reinterpret_cast<const uint8_t*>(utf8.get()), utf8.Length());
++    record->mHasData = true;
++  } else if (AppendBufferSource(aCx, data, record->mData)) {
++    record->mHasData = true;
++  } else if (data.isObject() && !type.EqualsLiteral("text") &&
++             !type.EqualsLiteral("url") &&
++             !type.EqualsLiteral("absolute-url") &&
++             !type.EqualsLiteral("mime")) {
++    // A smart-poster, external or local type may carry a whole message.
++    RootedDictionary<NDEFMessageInit> nested(aCx);
++    if (!nested.Init(aCx, data)) {
++      aRv.NoteJSContextException(aCx);
++      return nullptr;
++    }
++    for (const NDEFRecordInit& init : nested.mRecords) {
++      RefPtr<NDEFRecord> child = Create(aGlobal, aCx, init, aRv);
++      if (aRv.Failed()) {
++        return nullptr;
++      }
++      record->mRecords.AppendElement(std::move(child));
++    }
++    record->mHasRecords = true;
++  } else {
++    aRv.ThrowTypeError("The record data is not valid for its type.");
++    return nullptr;
++  }
++
++  if (type.EqualsLiteral("text")) {
++    record->mEncoding = aInit.mEncoding.WasPassed() ? aInit.mEncoding.Value()
++                                                    : u"utf-8"_ns;
++    record->mLang =
++        aInit.mLang.WasPassed() ? aInit.mLang.Value() : nsString(u"en"_ns);
++  } else if (type.EqualsLiteral("mime") && record->mMediaType.IsVoid()) {
++    record->mMediaType.AssignLiteral("application/octet-stream");
++  }
++  return record.forget();
++}
++
++void NDEFRecord::GetData(JSContext* aCx, JS::MutableHandle<JSObject*> aRetVal,
++                         ErrorResult& aRv) const {
++  if (!mHasData) {
++    aRetVal.set(nullptr);
++    return;
++  }
++  JS::Rooted<JSObject*> buffer(aCx, ArrayBuffer::Create(aCx, mData, aRv));
++  if (aRv.Failed()) {
++    return;
++  }
++  JSObject* view = JS_NewDataView(aCx, buffer, 0, mData.Length());
++  if (!view) {
++    aRv.NoteJSContextException(aCx);
++    return;
++  }
++  aRetVal.set(view);
++}
++
++void NDEFRecord::ToRecords(
++    Nullable<nsTArray<RefPtr<NDEFRecord>>>& aRetVal) const {
++  if (!mHasRecords) {
++    aRetVal.SetNull();
++    return;
++  }
++  aRetVal.SetValue(mRecords.Clone());
++}
++
++// ---------------------------------------------------------------------------
++// NDEFMessage
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(NDEFMessage, mGlobal, mRecords)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(NDEFMessage)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(NDEFMessage)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(NDEFMessage)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++JSObject* NDEFMessage::WrapObject(JSContext* aCx,
++                                  JS::Handle<JSObject*> aGivenProto) {
++  return NDEFMessage_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++/* static */
++already_AddRefed<NDEFMessage> NDEFMessage::Constructor(
++    const GlobalObject& aGlobal, const NDEFMessageInit& aInit,
++    ErrorResult& aRv) {
++  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
++  return Create(global, aGlobal.Context(), aInit, aRv);
++}
++
++/* static */
++already_AddRefed<NDEFMessage> NDEFMessage::Create(nsIGlobalObject* aGlobal,
++                                                  JSContext* aCx,
++                                                  const NDEFMessageInit& aInit,
++                                                  ErrorResult& aRv) {
++  RefPtr<NDEFMessage> message = new NDEFMessage(aGlobal);
++  for (const NDEFRecordInit& init : aInit.mRecords) {
++    RefPtr<NDEFRecord> record = NDEFRecord::Create(aGlobal, aCx, init, aRv);
++    if (aRv.Failed()) {
++      return nullptr;
++    }
++    message->mRecords.AppendElement(std::move(record));
++  }
++  return message.forget();
++}
++
++void NDEFMessage::GetRecords(nsTArray<RefPtr<NDEFRecord>>& aRetVal) const {
++  aRetVal = mRecords.Clone();
++}
++
++// ---------------------------------------------------------------------------
++// NDEFReader
++
++/* static */
++already_AddRefed<NDEFReader> NDEFReader::Constructor(
++    const GlobalObject& aGlobal, ErrorResult& aRv) {
++  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
++  if (!global) {
++    aRv.Throw(NS_ERROR_FAILURE);
++    return nullptr;
++  }
++  return MakeAndAddRef<NDEFReader>(global);
++}
++
++JSObject* NDEFReader::WrapObject(JSContext* aCx,
++                                 JS::Handle<JSObject*> aGivenProto) {
++  return NDEFReader_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++// The event handler atoms are not part of Gecko's static atom table; dynamic
++// atoms work the same way for EventHandler attributes. Each is atomized once
++// and its reference deliberately kept for the life of the process: a raw
++// pointer has no static destructor to run at shutdown.
++static nsAtom* OnReadingAtom() {
++  static nsAtom* const atom = NS_Atomize(u"onreading"_ns).take();
++  return atom;
++}
++
++static nsAtom* OnReadingErrorAtom() {
++  static nsAtom* const atom = NS_Atomize(u"onreadingerror"_ns).take();
++  return atom;
++}
++
++EventHandlerNonNull* NDEFReader::GetOnreading() {
++  return GetEventHandler(OnReadingAtom());
++}
++
++void NDEFReader::SetOnreading(EventHandlerNonNull* aCallback) {
++  SetEventHandler(OnReadingAtom(), aCallback);
++}
++
++EventHandlerNonNull* NDEFReader::GetOnreadingerror() {
++  return GetEventHandler(OnReadingErrorAtom());
++}
++
++void NDEFReader::SetOnreadingerror(EventHandlerNonNull* aCallback) {
++  SetEventHandler(OnReadingErrorAtom(), aCallback);
++}
++
++already_AddRefed<Promise> NDEFReader::Refuse(AbortSignal* aSignal,
++                                             ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(GetOwnerGlobal(), aRv);
++  if (aRv.Failed()) {
++    return nullptr;
++  }
++  // An already-aborted signal wins, as in Chrome.
++  if (aSignal && aSignal->Aborted()) {
++    AutoJSAPI jsapi;
++    if (jsapi.Init(GetOwnerGlobal())) {
++      JS::Rooted<JS::Value> reason(jsapi.cx());
++      aSignal->GetReason(jsapi.cx(), &reason);
++      promise->MaybeReject(reason);
++      return promise.forget();
++    }
++  }
++  promise->MaybeRejectWithNotAllowedError("NFC permission request denied.");
++  return promise.forget();
++}
++
++already_AddRefed<Promise> NDEFReader::Scan(const NDEFScanOptions& aOptions,
++                                           ErrorResult& aRv) {
++  return Refuse(
++      aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get() : nullptr,
++      aRv);
++}
++
++already_AddRefed<Promise> NDEFReader::Write(
++    JSContext* aCx,
++    const StringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit& aMessage,
++    const NDEFWriteOptions& aOptions, ErrorResult& aRv) {
++  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
++                                             : nullptr,
++                aRv);
++}
++
++already_AddRefed<Promise> NDEFReader::MakeReadOnly(
++    const NDEFMakeReadOnlyOptions& aOptions, ErrorResult& aRv) {
++  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
++                                             : nullptr,
++                aRv);
++}
++
++// ---------------------------------------------------------------------------
++// NDEFReadingEvent
++
++NS_IMPL_CYCLE_COLLECTION_INHERITED(NDEFReadingEvent, Event, mMessage)
++NS_IMPL_ADDREF_INHERITED(NDEFReadingEvent, Event)
++NS_IMPL_RELEASE_INHERITED(NDEFReadingEvent, Event)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(NDEFReadingEvent)
++NS_INTERFACE_MAP_END_INHERITING(Event)
++
++JSObject* NDEFReadingEvent::WrapObjectInternal(
++    JSContext* aCx, JS::Handle<JSObject*> aGivenProto) {
++  return NDEFReadingEvent_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++/* static */
++already_AddRefed<NDEFReadingEvent> NDEFReadingEvent::Constructor(
++    const GlobalObject& aGlobal, const nsAString& aType,
++    const NDEFReadingEventInit& aInit, ErrorResult& aRv) {
++  nsCOMPtr<EventTarget> owner = do_QueryInterface(aGlobal.GetAsSupports());
++  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
++  RefPtr<NDEFReadingEvent> event = new NDEFReadingEvent(owner);
++  bool trusted = event->Init(owner);
++  event->InitEvent(aType, aInit.mBubbles, aInit.mCancelable);
++  event->SetTrusted(trusted);
++  event->SetComposed(aInit.mComposed);
++  if (!aInit.mSerialNumber.IsNull()) {
++    event->mSerialNumber = aInit.mSerialNumber.Value();
++  }
++  event->mMessage =
++      NDEFMessage::Create(global, aGlobal.Context(), aInit.mMessage, aRv);
++  if (aRv.Failed()) {
++    return nullptr;
++  }
++  return event.forget();
++}
++
++}  // namespace mozilla::dom
+diff --git a/dom/base/NDEFReader.h b/dom/base/NDEFReader.h
+new file mode 100644
+index 0000000000..3f3f162054
+--- /dev/null
++++ b/dom/base/NDEFReader.h
+@@ -0,0 +1,165 @@
++/* Camoufox: Web NFC (NDEFReader, NDEFMessage, NDEFRecord, NDEFReadingEvent)
++ * for an emulated Android device.
++ *
++ * Chrome on Android is the only browser with Web NFC, so its absence is one of
++ * the simplest "this is not a phone" checks. There is no NFC hardware here:
++ * the records and messages are real (constructible, inspectable), and every
++ * operation that would touch a tag is refused with NotAllowedError -- what
++ * Chrome answers when the page does not hold the NFC permission. */
++#ifndef mozilla_dom_NDEFReader_h
++#define mozilla_dom_NDEFReader_h
++
++#include "mozilla/DOMEventTargetHelper.h"
++#include "mozilla/dom/BindingDeclarations.h"
++#include "mozilla/dom/Event.h"
++#include "nsCOMPtr.h"
++#include "nsCycleCollectionParticipant.h"
++#include "nsTArray.h"
++#include "nsWrapperCache.h"
++
++namespace mozilla {
++class ErrorResult;
++
++namespace dom {
++
++class Promise;
++struct NDEFMessageInit;
++struct NDEFRecordInit;
++struct NDEFReadingEventInit;
++struct NDEFScanOptions;
++struct NDEFWriteOptions;
++struct NDEFMakeReadOnlyOptions;
++class OwningStringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit;
++class StringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit;
++
++class NDEFRecord final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(NDEFRecord)
++
++  static already_AddRefed<NDEFRecord> Constructor(const GlobalObject& aGlobal,
++                                                  const NDEFRecordInit& aInit,
++                                                  ErrorResult& aRv);
++  static already_AddRefed<NDEFRecord> Create(nsIGlobalObject* aGlobal,
++                                             JSContext* aCx,
++                                             const NDEFRecordInit& aInit,
++                                             ErrorResult& aRv);
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetRecordType(nsAString& aRetVal) const { aRetVal = mRecordType; }
++  void GetMediaType(nsAString& aRetVal) const { aRetVal = mMediaType; }
++  void GetId(nsAString& aRetVal) const { aRetVal = mId; }
++  void GetData(JSContext* aCx, JS::MutableHandle<JSObject*> aRetVal,
++               ErrorResult& aRv) const;
++  void GetEncoding(nsAString& aRetVal) const { aRetVal = mEncoding; }
++  void GetLang(nsAString& aRetVal) const { aRetVal = mLang; }
++  void ToRecords(Nullable<nsTArray<RefPtr<NDEFRecord>>>& aRetVal) const;
++
++ private:
++  explicit NDEFRecord(nsIGlobalObject* aGlobal);
++  ~NDEFRecord() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  nsString mRecordType;
++  // Void when null.
++  nsString mMediaType;
++  nsString mId;
++  nsString mEncoding;
++  nsString mLang;
++  bool mHasData = false;
++  nsTArray<uint8_t> mData;
++  // Records of a smart-poster or external-type payload, when given as one.
++  bool mHasRecords = false;
++  nsTArray<RefPtr<NDEFRecord>> mRecords;
++};
++
++class NDEFMessage final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(NDEFMessage)
++
++  static already_AddRefed<NDEFMessage> Constructor(
++      const GlobalObject& aGlobal, const NDEFMessageInit& aInit,
++      ErrorResult& aRv);
++  static already_AddRefed<NDEFMessage> Create(nsIGlobalObject* aGlobal,
++                                              JSContext* aCx,
++                                              const NDEFMessageInit& aInit,
++                                              ErrorResult& aRv);
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetRecords(nsTArray<RefPtr<NDEFRecord>>& aRetVal) const;
++
++ private:
++  explicit NDEFMessage(nsIGlobalObject* aGlobal) : mGlobal(aGlobal) {}
++  ~NDEFMessage() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  nsTArray<RefPtr<NDEFRecord>> mRecords;
++};
++
++class NDEFReader final : public DOMEventTargetHelper {
++ public:
++  NS_INLINE_DECL_REFCOUNTING_INHERITED(NDEFReader, DOMEventTargetHelper)
++
++  static already_AddRefed<NDEFReader> Constructor(const GlobalObject& aGlobal,
++                                                  ErrorResult& aRv);
++
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  EventHandlerNonNull* GetOnreading();
++  void SetOnreading(EventHandlerNonNull* aCallback);
++  EventHandlerNonNull* GetOnreadingerror();
++  void SetOnreadingerror(EventHandlerNonNull* aCallback);
++
++  already_AddRefed<Promise> Scan(const NDEFScanOptions& aOptions,
++                                 ErrorResult& aRv);
++  already_AddRefed<Promise> Write(
++      JSContext* aCx,
++      const StringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit& aMessage,
++      const NDEFWriteOptions& aOptions, ErrorResult& aRv);
++  already_AddRefed<Promise> MakeReadOnly(
++      const NDEFMakeReadOnlyOptions& aOptions, ErrorResult& aRv);
++
++ private:
++  explicit NDEFReader(nsIGlobalObject* aGlobal)
++      : DOMEventTargetHelper(aGlobal) {}
++  ~NDEFReader() = default;
++
++  already_AddRefed<Promise> Refuse(AbortSignal* aSignal, ErrorResult& aRv);
++};
++
++class NDEFReadingEvent final : public Event {
++ public:
++  NS_DECL_ISUPPORTS_INHERITED
++  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(NDEFReadingEvent, Event)
++
++  static already_AddRefed<NDEFReadingEvent> Constructor(
++      const GlobalObject& aGlobal, const nsAString& aType,
++      const NDEFReadingEventInit& aInit, ErrorResult& aRv);
++
++  JSObject* WrapObjectInternal(JSContext* aCx,
++                               JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetSerialNumber(nsAString& aRetVal) const { aRetVal = mSerialNumber; }
++  NDEFMessage* Message() const { return mMessage; }
++
++ private:
++  explicit NDEFReadingEvent(EventTarget* aOwner)
++      : Event(aOwner, nullptr, nullptr) {}
++  ~NDEFReadingEvent() = default;
++
++  nsString mSerialNumber;
++  RefPtr<NDEFMessage> mMessage;
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_NDEFReader_h
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 6001101692..798f3264aa 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -7,6 +7,7 @@
+ // Camoufox: per-context + global navigator spoofing
+ #include "NavigatorManager.h"
+ #include "mozilla/dom/AndroidDevice.h"
++#include "mozilla/dom/ContactsManager.h"
+ #include "MaskConfig.hpp"
+ #include "nsJSUtils.h"
+ 
+@@ -169,6 +170,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaDevices)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mServiceWorkerContainer)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaCapabilities)
++  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mContacts)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaSession)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mAddonManager)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWebGpu)
+@@ -253,6 +255,8 @@ void Navigator::Invalidate() {
+ 
+   mMediaCapabilities = nullptr;
+ 
++  mContacts = nullptr;
++
+   if (mMediaSession) {
+     mMediaSession->Shutdown();
+     mMediaSession = nullptr;
+@@ -2383,6 +2387,13 @@ dom::MediaCapabilities* Navigator::MediaCapabilities() {
+   return mMediaCapabilities;
+ }
+ 
++dom::ContactsManager* Navigator::Contacts() {
++  if (!mContacts) {
++    mContacts = new dom::ContactsManager(GetWindow()->AsGlobal());
++  }
++  return mContacts;
++}
++
+ dom::MediaSession* Navigator::MediaSession() {
+   if (!mMediaSession) {
+     mMediaSession = new dom::MediaSession(GetWindow());
+diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
+index 074b38ae18..bf13b68dea 100644
+--- a/dom/base/Navigator.h
++++ b/dom/base/Navigator.h
+@@ -86,6 +86,7 @@ class VRServiceTest;
+ class XRSystem;
+ class StorageManager;
+ class MediaCapabilities;
++class ContactsManager;
+ class MediaSession;
+ class UserActivation;
+ struct ShareData;
+@@ -233,6 +234,8 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+ 
+   dom::MediaCapabilities* MediaCapabilities();
+   dom::MediaSession* MediaSession();
++  // Camoufox: the Contact Picker, on the Android device profiles only.
++  dom::ContactsManager* Contacts();
+ 
+   AddonManager* GetMozAddonManager(ErrorResult& aRv);
+ 
+@@ -314,6 +317,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+   nsTArray<uint32_t> mRequestedVibrationPattern;
+   RefPtr<StorageManager> mStorageManager;
+   RefPtr<dom::MediaCapabilities> mMediaCapabilities;
++  RefPtr<dom::ContactsManager> mContacts;
+   RefPtr<dom::MediaSession> mMediaSession;
+   RefPtr<AddonManager> mAddonManager;
+   RefPtr<webgpu::Instance> mWebGpu;
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index ecacba597e..f843ea8d53 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -563,8 +563,17 @@ SOURCES += ["NavigatorManager.cpp"]
+ # MaskConfig.hpp and are included (as a header) by generated bindings.
+ SOURCES += ["AndroidDevice.cpp"]
+ 
++# Web APIs only Chrome on Android has (Web NFC, the Contact Picker), exposed
++# on the Android device profiles.
++SOURCES += [
++    "ContactsManager.cpp",
++    "NDEFReader.cpp",
++]
++
+ EXPORTS.mozilla.dom += [
+     "AndroidDevice.h",
++    "ContactsManager.h",
++    "NDEFReader.h",
+ ]
+ 
+ # ScreenDimensionManager compiled separately for the same reason.
+diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
+index 95184adcef..5094b57ebc 100644
+--- a/dom/base/nsGlobalWindowInner.h
++++ b/dom/base/nsGlobalWindowInner.h
+@@ -597,6 +597,22 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+ #undef ERROR_EVENT
+ #undef EVENT
+ 
++#if !defined(MOZ_WIDGET_ANDROID)
++  // Camoufox: window.onorientationchange for the Android device profiles
++  // (Window.webidl gates it). Android builds declare it in EventNameList.inc.
++  mozilla::dom::EventHandlerNonNull* GetOnorientationchange() {
++    mozilla::EventListenerManager* elm = GetExistingListenerManager();
++    return elm ? elm->GetEventHandler(nsGkAtoms::onorientationchange)
++               : nullptr;
++  }
++  void SetOnorientationchange(mozilla::dom::EventHandlerNonNull* handler) {
++    mozilla::EventListenerManager* elm = GetOrCreateListenerManager();
++    if (elm) {
++      elm->SetEventHandler(nsGkAtoms::onorientationchange, handler);
++    }
++  }
++#endif
++
+   nsISupports* GetParentObject() { return nullptr; }
+ 
+   static JSObject* CreateNamedPropertiesObject(JSContext* aCx,
+diff --git a/dom/bindings/Bindings.conf b/dom/bindings/Bindings.conf
+index 45162988ea..f75e813e05 100644
+--- a/dom/bindings/Bindings.conf
++++ b/dom/bindings/Bindings.conf
+@@ -120,6 +120,11 @@ DOMInterfaces = {
+     'nativeType': 'mozilla::dom::Console',
+ },
+ 
++'ContactAddress': {
++    # Camoufox: defined with ContactsManager (Android device profiles).
++    'headerFile': 'mozilla/dom/ContactsManager.h',
++},
++
+ 'ConsoleInstance': {
+     'implicitJSContext': ['clear', 'count', 'countReset', 'groupEnd', 'time', 'timeEnd'],
+ },
+@@ -571,6 +576,19 @@ DOMInterfaces = {
+     'headerFile': 'nsDOMMutationObserver.h',
+ },
+ 
++'NDEFMessage': {
++    # Camoufox: Web NFC is one header (Android device profiles).
++    'headerFile': 'mozilla/dom/NDEFReader.h',
++},
++
++'NDEFReadingEvent': {
++    'headerFile': 'mozilla/dom/NDEFReader.h',
++},
++
++'NDEFRecord': {
++    'headerFile': 'mozilla/dom/NDEFReader.h',
++},
++
+ 'NamedNodeMap': {
+     'nativeType': 'nsDOMAttributeMap',
+ },
+diff --git a/dom/webidl/ContactsManager.webidl b/dom/webidl/ContactsManager.webidl
+new file mode 100644
+index 0000000000..4e0dce6fc6
+--- /dev/null
++++ b/dom/webidl/ContactsManager.webidl
+@@ -0,0 +1,54 @@
++/* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/.
++ *
++ * The origin of this IDL file is
++ * https://w3c.github.io/contact-picker/#idl-index
++ *
++ * Camoufox: the Contact Picker exists only in Chrome on Android, so it is
++ * exposed only on an emulated Android device (AndroidDevice::Exposed). There
++ * is no address book behind it: select() behaves as if the user dismissed
++ * the picker.
++ */
++
++enum ContactProperty { "address", "email", "icon", "name", "tel" };
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface ContactAddress {
++  [Default] object toJSON();
++  readonly attribute DOMString city;
++  readonly attribute DOMString country;
++  readonly attribute DOMString dependentLocality;
++  readonly attribute DOMString organization;
++  readonly attribute DOMString phone;
++  readonly attribute DOMString postalCode;
++  readonly attribute DOMString recipient;
++  readonly attribute DOMString region;
++  readonly attribute DOMString sortingCode;
++  [Frozen, Cached, Pure]
++  readonly attribute sequence<DOMString> addressLine;
++};
++
++dictionary ContactInfo {
++  sequence<ContactAddress> address;
++  sequence<DOMString> email;
++  sequence<Blob> icon;
++  sequence<DOMString> name;
++  sequence<DOMString> tel;
++};
++
++dictionary ContactsSelectOptions {
++  boolean multiple = false;
++};
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface ContactsManager {
++  [NewObject]
++  Promise<sequence<ContactProperty>> getProperties();
++  [NewObject]
++  Promise<sequence<ContactInfo>> select(sequence<ContactProperty> properties,
++                                        optional ContactsSelectOptions options = {});
++};
++
++// navigator.contacts is declared in Navigator.webidl.
+diff --git a/dom/webidl/NDEFReader.webidl b/dom/webidl/NDEFReader.webidl
+new file mode 100644
+index 0000000000..72fc5b5900
+--- /dev/null
++++ b/dom/webidl/NDEFReader.webidl
+@@ -0,0 +1,102 @@
++/* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/.
++ *
++ * The origin of this IDL file is
++ * https://w3c.github.io/web-nfc/#idl-index
++ *
++ * Camoufox: Web NFC exists only in Chrome on Android, so it is exposed only on
++ * an emulated Android device (AndroidDevice::Exposed). There is no NFC
++ * hardware behind it: every operation is refused the way Chrome refuses it
++ * when the NFC permission is not granted.
++ */
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface NDEFMessage {
++  [Throws]
++  constructor(NDEFMessageInit messageInit);
++  [Frozen, Cached, Pure]
++  readonly attribute sequence<NDEFRecord> records;
++};
++
++dictionary NDEFMessageInit {
++  required sequence<NDEFRecordInit> records;
++};
++
++typedef (DOMString or BufferSource or NDEFMessageInit) NDEFMessageSource;
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface NDEFRecord {
++  [Throws]
++  constructor(NDEFRecordInit recordInit);
++
++  readonly attribute USVString recordType;
++  readonly attribute USVString? mediaType;
++  readonly attribute USVString? id;
++  // A DataView in the specification; Gecko's WebIDL has no DataView type,
++  // so the binding returns the DataView NDEFRecord::GetData creates.
++  [Throws]
++  readonly attribute object? data;
++
++  readonly attribute USVString? encoding;
++  readonly attribute USVString? lang;
++
++  sequence<NDEFRecord>? toRecords();
++};
++
++dictionary NDEFRecordInit {
++  required USVString recordType;
++  USVString mediaType;
++  USVString id;
++
++  USVString encoding;
++  USVString lang;
++
++  any data;
++};
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface NDEFReader : EventTarget {
++  [Throws]
++  constructor();
++
++  attribute EventHandler onreading;
++  attribute EventHandler onreadingerror;
++
++  [NewObject]
++  Promise<undefined> scan(optional NDEFScanOptions options = {});
++  [NewObject]
++  Promise<undefined> write(NDEFMessageSource message,
++                           optional NDEFWriteOptions options = {});
++  [NewObject]
++  Promise<undefined> makeReadOnly(optional NDEFMakeReadOnlyOptions options = {});
++};
++
++[SecureContext, Exposed=Window, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface NDEFReadingEvent : Event {
++  [Throws]
++  constructor(DOMString type, NDEFReadingEventInit readingEventInitDict);
++
++  readonly attribute DOMString serialNumber;
++  [SameObject]
++  readonly attribute NDEFMessage message;
++};
++
++dictionary NDEFReadingEventInit : EventInit {
++  DOMString? serialNumber = "";
++  required NDEFMessageInit message;
++};
++
++dictionary NDEFWriteOptions {
++  boolean overwrite = true;
++  AbortSignal? signal;
++};
++
++dictionary NDEFMakeReadOnlyOptions {
++  AbortSignal? signal;
++};
++
++dictionary NDEFScanOptions {
++  AbortSignal signal;
++};
+diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
+index 819a1064d1..a15c51d7ba 100644
+--- a/dom/webidl/Navigator.webidl
++++ b/dom/webidl/Navigator.webidl
+@@ -316,6 +316,14 @@ interface mixin NavigatorDeviceMemory {
+ };
+ Navigator includes NavigatorDeviceMemory;
+ 
++// https://w3c.github.io/contact-picker/#contacts-manager
++// Camoufox: the Contact Picker, on the Android device profiles only (see
++// ContactsManager.webidl).
++partial interface Navigator {
++  [SecureContext, SameObject, Func="mozilla::dom::AndroidDevice::Exposed"]
++  readonly attribute ContactsManager contacts;
++};
++
+ // https://w3c.github.io/webappsec-credential-management/#framework-credential-management
+ partial interface Navigator {
+   [Pref="security.webauth.webauthn", SecureContext, SameObject]
+diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
+index 6b4c7101fa..6921697a2a 100644
+--- a/dom/webidl/Window.webidl
++++ b/dom/webidl/Window.webidl
+@@ -712,14 +712,20 @@ Window includes TouchEventHandlers;
+ 
+ Window includes OnErrorEventHandlerForWindow;
+ 
+-#if defined(MOZ_WIDGET_ANDROID)
+ // https://compat.spec.whatwg.org/#windoworientation-interface
++// Camoufox: Android builds only, and the Android device profiles.
+ partial interface Window {
++#if defined(MOZ_WIDGET_ANDROID)
+   [UseCounter, NeedsCallerType]
+   readonly attribute short orientation;
+            attribute EventHandler onorientationchange;
+-};
++#else
++  [NeedsCallerType, Func="mozilla::dom::AndroidDevice::Exposed"]
++  readonly attribute short orientation;
++  [Func="mozilla::dom::AndroidDevice::Exposed"]
++           attribute EventHandler onorientationchange;
+ #endif
++};
+ 
+ [MOZ_CAN_RUN_SCRIPT_BOUNDARY]
+ callback PromiseDocumentFlushedCallback = any ();
+diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
+index 52a234ea0b..acd3e42fa7 100644
+--- a/dom/webidl/moz.build
++++ b/dom/webidl/moz.build
+@@ -496,6 +496,7 @@ WEBIDL_FILES = [
+     "CompressionStream.webidl",
+     "Console.webidl",
+     "ConstantSourceNode.webidl",
++    "ContactsManager.webidl",
+     "ConvolverNode.webidl",
+     "CookieChangeEvent.webidl",
+     "CookieStore.webidl",
+@@ -841,6 +842,7 @@ WEBIDL_FILES = [
+     "NavigationPreloadManager.webidl",
+     "NavigationTransition.webidl",
+     "Navigator.webidl",
++    "NDEFReader.webidl",
+     "NetErrorInfo.webidl",
+     "NetworkInformation.webidl",
+     "NetworkOptions.webidl",

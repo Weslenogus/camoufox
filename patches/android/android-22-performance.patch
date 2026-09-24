@@ -1,0 +1,265 @@
+diff --git a/dom/performance/MemoryInfo.cpp b/dom/performance/MemoryInfo.cpp
+new file mode 100644
+index 0000000000..8565ea7250
+--- /dev/null
++++ b/dom/performance/MemoryInfo.cpp
+@@ -0,0 +1,96 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "mozilla/dom/MemoryInfo.h"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <limits>
++
++#include "MaskConfig.hpp"
++#include "js/GCAPI.h"
++#include "mozilla/CycleCollectedJSContext.h"
++#include "mozilla/TimeStamp.h"
++#include "mozilla/dom/PerformanceBinding.h"
++
++namespace mozilla::dom {
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(MemoryInfo, mGlobal)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(MemoryInfo)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(MemoryInfo)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(MemoryInfo)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++JSObject* MemoryInfo::WrapObject(JSContext* aCx,
++                                 JS::Handle<JSObject*> aGivenProto) {
++  return MemoryInfo_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++/* static */
++uint64_t MemoryInfo::Quantize(uint64_t aSize) {
++  constexpr int kNumberOfBuckets = 100;
++  static const std::array<uint64_t, kNumberOfBuckets> sBuckets = [] {
++    std::array<uint64_t, kNumberOfBuckets> buckets{};
++    // The first bucket is roughly 10 MB, the largest roughly 4 GB; scale by
++    // the Nth root of the ratio so that every bucket is used.
++    float sizeOfNextBucket = 10000000.0f;
++    const float kLargestBucketSize = 4000000000.0f;
++    const float scalingFactor =
++        std::exp(std::log(kLargestBucketSize / sizeOfNextBucket) /
++                 float(kNumberOfBuckets));
++    uint64_t nextPowerOfTen = static_cast<uint64_t>(
++        std::pow(10, std::floor(std::log10(sizeOfNextBucket)) + 1) + 0.5);
++    uint64_t granularity = nextPowerOfTen / 1000;  // 3 significant digits
++    for (int i = 0; i < kNumberOfBuckets; ++i) {
++      const uint64_t current = static_cast<uint64_t>(sizeOfNextBucket);
++      buckets[i] = current - (current % granularity);
++      sizeOfNextBucket *= scalingFactor;
++      if (sizeOfNextBucket >= float(nextPowerOfTen)) {
++        nextPowerOfTen *= 10;
++        granularity *= 10;
++      }
++      if (i > 0 && buckets[i] < buckets[i - 1]) {
++        buckets[i] = std::numeric_limits<uint64_t>::max();
++      }
++    }
++    return buckets;
++  }();
++  for (uint64_t bucket : sBuckets) {
++    if (aSize <= bucket) {
++      return bucket;
++    }
++  }
++  return sBuckets[kNumberOfBuckets - 1];
++}
++
++/* static */
++already_AddRefed<MemoryInfo> MemoryInfo::Create(nsIGlobalObject* aGlobal) {
++  MOZ_ASSERT(NS_IsMainThread());
++  // Refreshed at most every 20 minutes, as in Chrome.
++  static TimeStamp sSampledAt;
++  static uint64_t sUsed = 0;
++  static uint64_t sTotal = 0;
++  const TimeStamp now = TimeStamp::Now();
++  if (sSampledAt.IsNull() ||
++      (now - sSampledAt) > TimeDuration::FromSeconds(20 * 60)) {
++    uint64_t heap = 0;
++    if (CycleCollectedJSContext* ccjs = CycleCollectedJSContext::Get()) {
++      heap = JS_GetGCParameter(ccjs->Context(), JSGC_BYTES);
++    }
++    sUsed = Quantize(heap);
++    // The committed heap is larger than the live part.
++    sTotal = std::max(sUsed, Quantize(heap + heap / 4));
++    sSampledAt = now;
++  }
++  const uint64_t limit =
++      MaskConfig::GetUint64("performance.memory.jsHeapSizeLimit")
++          .value_or(2147483648ULL);
++  RefPtr<MemoryInfo> info = new MemoryInfo(aGlobal, limit, sTotal, sUsed);
++  return info.forget();
++}
++
++}  // namespace mozilla::dom
+diff --git a/dom/performance/MemoryInfo.h b/dom/performance/MemoryInfo.h
+new file mode 100644
+index 0000000000..9a9d25dedb
+--- /dev/null
++++ b/dom/performance/MemoryInfo.h
+@@ -0,0 +1,58 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Camoufox: performance.memory, Chrome's non-standard JS heap report, on the
++ * Android device profiles.
++ *
++ * Chrome does not report exact heap sizes: without --enable-precise-memory-info
++ * the used and total sizes are rounded up to one of 100 buckets spaced
++ * exponentially from 10 MB to 4 GB (three significant digits), and refreshed
++ * at most every 20 minutes. The same is done here with the SpiderMonkey GC
++ * heap's size. jsHeapSizeLimit comes from "performance.memory.jsHeapSizeLimit".
++ */
++
++#ifndef mozilla_dom_MemoryInfo_h
++#define mozilla_dom_MemoryInfo_h
++
++#include "nsCOMPtr.h"
++#include "nsCycleCollectionParticipant.h"
++#include "nsIGlobalObject.h"
++#include "nsWrapperCache.h"
++
++namespace mozilla::dom {
++
++class MemoryInfo final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(MemoryInfo)
++
++  // A snapshot for aGlobal's page, as Chrome would report it.
++  static already_AddRefed<MemoryInfo> Create(nsIGlobalObject* aGlobal);
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  uint64_t JsHeapSizeLimit() const { return mLimit; }
++  uint64_t TotalJSHeapSize() const { return mTotal; }
++  uint64_t UsedJSHeapSize() const { return mUsed; }
++
++  // Chromium's QuantizeMemorySize (third_party/blink/.../memory_info.cc).
++  static uint64_t Quantize(uint64_t aSize);
++
++ private:
++  MemoryInfo(nsIGlobalObject* aGlobal, uint64_t aLimit, uint64_t aTotal,
++             uint64_t aUsed)
++      : mGlobal(aGlobal), mLimit(aLimit), mTotal(aTotal), mUsed(aUsed) {}
++  ~MemoryInfo() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  const uint64_t mLimit;
++  const uint64_t mTotal;
++  const uint64_t mUsed;
++};
++
++}  // namespace mozilla::dom
++
++#endif  // mozilla_dom_MemoryInfo_h
+diff --git a/dom/performance/Performance.cpp b/dom/performance/Performance.cpp
+index 3754154ae9..18d55a3716 100644
+--- a/dom/performance/Performance.cpp
++++ b/dom/performance/Performance.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "Performance.h"
+ 
++#include "mozilla/dom/MemoryInfo.h"
++
+ #include <sstream>
+ 
+ #if defined(XP_LINUX)
+@@ -155,6 +157,10 @@ DOMHighResTimeStamp Performance::NowUnclamped() const {
+   return duration.ToMilliseconds();
+ }
+ 
++already_AddRefed<MemoryInfo> Performance::Memory() {
++  return MemoryInfo::Create(GetOwnerGlobal());
++}
++
+ DOMHighResTimeStamp Performance::TimeOrigin() {
+   if (!mPerformanceService) {
+     mPerformanceService = PerformanceService::GetOrCreate();
+diff --git a/dom/performance/Performance.h b/dom/performance/Performance.h
+index 29d68c84a3..67ca1cb66e 100644
+--- a/dom/performance/Performance.h
++++ b/dom/performance/Performance.h
+@@ -23,6 +23,7 @@ namespace dom {
+ class OwningStringOrDouble;
+ class StringOrPerformanceMeasureOptions;
+ class PerformanceEntry;
++class MemoryInfo;
+ class PerformanceMark;
+ struct PerformanceMarkOptions;
+ struct PerformanceMeasureOptions;
+@@ -82,6 +83,9 @@ class Performance : public DOMEventTargetHelper {
+ 
+   DOMHighResTimeStamp TimeOrigin();
+ 
++  // Camoufox: performance.memory (Android device profiles; see MemoryInfo.h).
++  already_AddRefed<MemoryInfo> Memory();
++
+   already_AddRefed<PerformanceMark> Mark(
+       JSContext* aCx, const nsAString& aName,
+       const PerformanceMarkOptions& aMarkOptions, ErrorResult& aRv);
+diff --git a/dom/performance/moz.build b/dom/performance/moz.build
+index ae626380db..c5d4eb1d58 100644
+--- a/dom/performance/moz.build
++++ b/dom/performance/moz.build
+@@ -9,6 +9,7 @@ EXPORTS.mozilla.dom += [
+     "CacheablePerformanceTimingData.h",
+     "EventCounts.h",
+     "LargestContentfulPaint.h",
++    "MemoryInfo.h",
+     "Performance.h",
+     "PerformanceEntry.h",
+     "PerformanceEventTiming.h",
+@@ -34,6 +35,7 @@ EXPORTS.mozilla.dom += [
+ UNIFIED_SOURCES += [
+     "EventCounts.cpp",
+     "LargestContentfulPaint.cpp",
++    "MemoryInfo.cpp",
+     "Performance.cpp",
+     "PerformanceEntry.cpp",
+     "PerformanceEventTiming.cpp",
+@@ -65,3 +67,6 @@ MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/webidl/Performance.webidl b/dom/webidl/Performance.webidl
+index 55a8e1c77e..c055386bc7 100644
+--- a/dom/webidl/Performance.webidl
++++ b/dom/webidl/Performance.webidl
+@@ -57,6 +57,21 @@ partial interface Performance {
+   attribute EventHandler onresourcetimingbufferfull;
+ };
+ 
++// Camoufox: Chrome's non-standard performance.memory, on the Android device
++// profiles only. As in Chrome, MemoryInfo has no interface object.
++[LegacyNoInterfaceObject, Exposed=Window]
++interface MemoryInfo {
++  readonly attribute unsigned long long jsHeapSizeLimit;
++  readonly attribute unsigned long long totalJSHeapSize;
++  readonly attribute unsigned long long usedJSHeapSize;
++};
++
++[Exposed=Window]
++partial interface Performance {
++  [Func="mozilla::dom::AndroidDevice::Exposed"]
++  readonly attribute MemoryInfo memory;
++};
++
+ // GC microbenchmarks, pref-guarded, not for general use (bug 1125412)
+ [Exposed=Window]
+ partial interface Performance {

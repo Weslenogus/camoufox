@@ -75,9 +75,26 @@ def list_files(root_dir, suffix):
             yield os.path.join(root_dir, relative_path).replace('\\', '/')
 
 
+# Patch directories applied after everything else, in this order. Patches here
+# build on the whole stack -- they touch files the other patches have already
+# changed -- so their context only matches once every other patch is in.
+# Within each directory the usual basename order holds.
+LATE_PATCH_DIRS = ('android',)
+
+
 def list_patches(root_dir='../patches', suffix='*.patch'):
-    """List all patch files"""
-    return sorted(list_files(root_dir, suffix), key=os.path.basename)
+    """List all patch files, late directories last"""
+    patches = sorted(list_files(root_dir, suffix), key=os.path.basename)
+
+    def late_rank(path):
+        parts = os.path.normpath(path).split(os.sep)
+        for rank, name in enumerate(LATE_PATCH_DIRS):
+            if name in parts:
+                return rank + 1
+        return 0
+
+    # sorted() is stable, so the basename order survives within each group.
+    return sorted(patches, key=late_rank)
 
 def is_bootstrap_patch(name):
     return bool(re.match(r'\d+\-.*', os.path.basename(name)))

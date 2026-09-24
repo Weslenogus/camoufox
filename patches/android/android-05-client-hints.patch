@@ -1,0 +1,459 @@
+diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
+index 798f3264aa..a19a6686aa 100644
+--- a/dom/base/Navigator.cpp
++++ b/dom/base/Navigator.cpp
+@@ -8,6 +8,7 @@
+ #include "NavigatorManager.h"
+ #include "mozilla/dom/AndroidDevice.h"
+ #include "mozilla/dom/ContactsManager.h"
++#include "mozilla/dom/NavigatorUAData.h"
+ #include "MaskConfig.hpp"
+ #include "nsJSUtils.h"
+ 
+@@ -179,6 +180,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mModelContext)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPrivateAttribution)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mUserActivation)
++  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mUserAgentData)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWakeLock)
+ 
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWindow)
+@@ -282,6 +284,8 @@ void Navigator::Invalidate() {
+ 
+   mUserActivation = nullptr;
+ 
++  mUserAgentData = nullptr;
++
+   mSharePromise = nullptr;
+ 
+   mWakeLock = nullptr;
+@@ -775,6 +779,14 @@ bool Navigator::GlobalPrivacyControl() {
+          gpcStatus;
+ }
+ 
++NavigatorUAData* Navigator::UserAgentData() {
++  // Only exposed when configured (NavigatorUAData::IsEnabled).
++  if (!mUserAgentData) {
++    mUserAgentData = new NavigatorUAData(mWindow->AsGlobal());
++  }
++  return mUserAgentData;
++}
++
+ double Navigator::DeviceMemory() {
+   // Only exposed when configured (AndroidDevice::HasDeviceMemory).
+   return AndroidDevice::DeviceMemory().value_or(0.0);
+diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
+index bf13b68dea..24cd1a1d5e 100644
+--- a/dom/base/Navigator.h
++++ b/dom/base/Navigator.h
+@@ -42,6 +42,7 @@ class CredentialsContainer;
+ class Clipboard;
+ class LockManager;
+ class ModelContext;
++class NavigatorUAData;
+ class NavigatorLogin;
+ class PrivateAttribution;
+ class HTMLMediaElement;
+@@ -179,6 +180,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+   bool JavaEnabled() { return false; }
+   uint64_t HardwareConcurrency();
+   double DeviceMemory();
++  NavigatorUAData* UserAgentData();
+   bool TaintEnabled() { return false; }
+ 
+   already_AddRefed<LegacyMozTCPSocket> MozTCPSocket();
+@@ -327,6 +329,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+   RefPtr<dom::ModelContext> mModelContext;
+   RefPtr<dom::PrivateAttribution> mPrivateAttribution;
+   RefPtr<dom::UserActivation> mUserActivation;
++  RefPtr<dom::NavigatorUAData> mUserAgentData;
+   RefPtr<dom::WakeLockJS> mWakeLock;
+ };
+ 
+diff --git a/dom/base/NavigatorUAData.cpp b/dom/base/NavigatorUAData.cpp
+new file mode 100644
+index 0000000000..965447fb32
+--- /dev/null
++++ b/dom/base/NavigatorUAData.cpp
+@@ -0,0 +1,119 @@
++/* Camoufox: navigator.userAgentData (User-Agent Client Hints). */
++#include "mozilla/dom/NavigatorUAData.h"
++
++#include "UAClientHints.hpp"
++#include "mozilla/dom/NavigatorUADataBinding.h"
++#include "mozilla/dom/Promise.h"
++
++namespace mozilla::dom {
++
++namespace ClientHints = MaskConfig::ClientHints;
++
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(NavigatorUAData, mGlobal)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(NavigatorUAData)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(NavigatorUAData)
++NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(NavigatorUAData)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
++
++NavigatorUAData::NavigatorUAData(nsIGlobalObject* aGlobal)
++    : mGlobal(aGlobal) {}
++
++/* static */
++bool NavigatorUAData::IsEnabled(JSContext*, JSObject*) {
++  return ClientHints::Enabled();
++}
++
++JSObject* NavigatorUAData::WrapObject(JSContext* aCx,
++                                      JS::Handle<JSObject*> aGivenProto) {
++  return NavigatorUAData_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++// Works for both the attribute's nsTArray and a dictionary's Sequence.
++template <typename Array>
++static void FillBrandList(const char* aKey, Array& aOut) {
++  for (const auto& [brand, version] : ClientHints::GetBrandList(aKey)) {
++    NavigatorUABrandVersion* entry = aOut.AppendElement(fallible);
++    if (!entry) {
++      return;
++    }
++    entry->mBrand.Construct(NS_ConvertUTF8toUTF16(brand));
++    entry->mVersion.Construct(NS_ConvertUTF8toUTF16(version));
++  }
++}
++
++static nsString ConfigString(const char* aKey) {
++  return NS_ConvertUTF8toUTF16(MaskConfig::GetString(aKey).value_or(""));
++}
++
++void NavigatorUAData::GetBrands(
++    nsTArray<NavigatorUABrandVersion>& aRetVal) const {
++  FillBrandList("userAgentData:brands", aRetVal);
++}
++
++bool NavigatorUAData::Mobile() const {
++  return MaskConfig::CheckBool("userAgentData:mobile");
++}
++
++void NavigatorUAData::GetPlatform(nsAString& aRetVal) const {
++  aRetVal = ConfigString("userAgentData:platform");
++}
++
++already_AddRefed<Promise> NavigatorUAData::GetHighEntropyValues(
++    const Sequence<nsString>& aHints, ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed()) {
++    return nullptr;
++  }
++
++  // The low-entropy values are always part of the result; each requested
++  // high-entropy hint is added on top, and unknown hints are ignored.
++  UADataValues values;
++  FillBrandList("userAgentData:brands", values.mBrands.Construct());
++  values.mMobile.Construct(Mobile());
++  values.mPlatform.Construct(ConfigString("userAgentData:platform"));
++
++  for (const nsString& hint : aHints) {
++    if (hint.EqualsLiteral("architecture")) {
++      values.mArchitecture.Construct(
++          ConfigString("userAgentData:architecture"));
++    } else if (hint.EqualsLiteral("bitness")) {
++      values.mBitness.Construct(ConfigString("userAgentData:bitness"));
++    } else if (hint.EqualsLiteral("formFactors")) {
++      auto& formFactors = values.mFormFactors.Construct();
++      for (const auto& factor :
++           MaskConfig::GetStringList("userAgentData:formFactors")) {
++        if (!formFactors.AppendElement(NS_ConvertUTF8toUTF16(factor),
++                                       fallible)) {
++          aRv.Throw(NS_ERROR_OUT_OF_MEMORY);
++          return nullptr;
++        }
++      }
++    } else if (hint.EqualsLiteral("fullVersionList")) {
++      FillBrandList("userAgentData:fullVersionList",
++                    values.mFullVersionList.Construct());
++    } else if (hint.EqualsLiteral("model")) {
++      values.mModel.Construct(ConfigString("userAgentData:model"));
++    } else if (hint.EqualsLiteral("platformVersion")) {
++      values.mPlatformVersion.Construct(
++          ConfigString("userAgentData:platformVersion"));
++    } else if (hint.EqualsLiteral("uaFullVersion")) {
++      values.mUaFullVersion.Construct(
++          ConfigString("userAgentData:uaFullVersion"));
++    } else if (hint.EqualsLiteral("wow64")) {
++      values.mWow64.Construct(MaskConfig::CheckBool("userAgentData:wow64"));
++    }
++  }
++
++  promise->MaybeResolve(values);
++  return promise.forget();
++}
++
++void NavigatorUAData::ToJSON(UALowEntropyJSON& aRetVal) const {
++  FillBrandList("userAgentData:brands", aRetVal.mBrands.Construct());
++  aRetVal.mMobile.Construct(Mobile());
++  aRetVal.mPlatform.Construct(ConfigString("userAgentData:platform"));
++}
++
++}  // namespace mozilla::dom
+diff --git a/dom/base/NavigatorUAData.h b/dom/base/NavigatorUAData.h
+new file mode 100644
+index 0000000000..ad8eb8ae0d
+--- /dev/null
++++ b/dom/base/NavigatorUAData.h
+@@ -0,0 +1,54 @@
++/* Camoufox: navigator.userAgentData (User-Agent Client Hints).
++ *
++ * Every value comes from CAMOU_CONFIG through MaskConfig::ClientHints, the
++ * same source the Sec-CH-UA request headers are built from, so the page's
++ * view and the wire cannot disagree. */
++#ifndef mozilla_dom_NavigatorUAData_h
++#define mozilla_dom_NavigatorUAData_h
++
++#include "mozilla/dom/BindingDeclarations.h"
++#include "nsCOMPtr.h"
++#include "nsCycleCollectionParticipant.h"
++#include "nsIGlobalObject.h"
++#include "nsWrapperCache.h"
++
++namespace mozilla {
++class ErrorResult;
++
++namespace dom {
++
++class Promise;
++struct NavigatorUABrandVersion;
++struct UALowEntropyJSON;
++
++class NavigatorUAData final : public nsISupports, public nsWrapperCache {
++ public:
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(NavigatorUAData)
++
++  explicit NavigatorUAData(nsIGlobalObject* aGlobal);
++
++  // WebIDL Func= gate: client hints exist only when configured.
++  static bool IsEnabled(JSContext*, JSObject*);
++
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetBrands(nsTArray<NavigatorUABrandVersion>& aRetVal) const;
++  bool Mobile() const;
++  void GetPlatform(nsAString& aRetVal) const;
++  already_AddRefed<Promise> GetHighEntropyValues(
++      const Sequence<nsString>& aHints, ErrorResult& aRv);
++  void ToJSON(UALowEntropyJSON& aRetVal) const;
++
++ private:
++  ~NavigatorUAData() = default;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++};
++
++}  // namespace dom
++}  // namespace mozilla
++
++#endif  // mozilla_dom_NavigatorUAData_h
+diff --git a/dom/base/moz.build b/dom/base/moz.build
+index f843ea8d53..32f4db0802 100644
+--- a/dom/base/moz.build
++++ b/dom/base/moz.build
+@@ -576,6 +576,13 @@ EXPORTS.mozilla.dom += [
+     "NDEFReader.h",
+ ]
+ 
++# navigator.userAgentData, compiled separately for the same reason.
++SOURCES += ["NavigatorUAData.cpp"]
++
++EXPORTS.mozilla.dom += [
++    "NavigatorUAData.h",
++]
++
+ # ScreenDimensionManager compiled separately for the same reason.
+ SOURCES += ["ScreenDimensionManager.cpp"]
+ 
+diff --git a/dom/webidl/NavigatorUAData.webidl b/dom/webidl/NavigatorUAData.webidl
+new file mode 100644
+index 0000000000..872f335e7d
+--- /dev/null
++++ b/dom/webidl/NavigatorUAData.webidl
+@@ -0,0 +1,56 @@
++/* -*- Mode: IDL; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/.
++ *
++ * The origin of this IDL file is
++ * https://wicg.github.io/ua-client-hints/#interface
++ *
++ * Camoufox: Firefox has no User-Agent Client Hints. This interface exists
++ * only when "userAgentData:brands" is configured (NavigatorUAData::IsEnabled),
++ * so a desktop Firefox fingerprint keeps its shape.
++ */
++
++dictionary NavigatorUABrandVersion {
++  DOMString brand;
++  DOMString version;
++};
++
++dictionary UADataValues {
++  DOMString architecture;
++  DOMString bitness;
++  sequence<NavigatorUABrandVersion> brands;
++  sequence<DOMString> formFactors;
++  sequence<NavigatorUABrandVersion> fullVersionList;
++  DOMString model;
++  boolean mobile;
++  DOMString platform;
++  DOMString platformVersion;
++  DOMString uaFullVersion; // deprecated in favor of fullVersionList
++  boolean wow64;
++};
++
++dictionary UALowEntropyJSON {
++  sequence<NavigatorUABrandVersion> brands;
++  boolean mobile;
++  DOMString platform;
++};
++
++[Exposed=(Window,Worker), SecureContext,
++ Func="mozilla::dom::NavigatorUAData::IsEnabled"]
++interface NavigatorUAData {
++  [Frozen, Cached, Pure]
++  readonly attribute sequence<NavigatorUABrandVersion> brands;
++  readonly attribute boolean mobile;
++  readonly attribute DOMString platform;
++  [NewObject]
++  Promise<UADataValues> getHighEntropyValues(sequence<DOMString> hints);
++  UALowEntropyJSON toJSON();
++};
++
++interface mixin NavigatorUA {
++  [SecureContext, SameObject, Func="mozilla::dom::NavigatorUAData::IsEnabled"]
++  readonly attribute NavigatorUAData userAgentData;
++};
++Navigator includes NavigatorUA;
++WorkerNavigator includes NavigatorUA;
+diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
+index acd3e42fa7..6921360139 100644
+--- a/dom/webidl/moz.build
++++ b/dom/webidl/moz.build
+@@ -842,6 +842,7 @@ WEBIDL_FILES = [
+     "NavigationPreloadManager.webidl",
+     "NavigationTransition.webidl",
+     "Navigator.webidl",
++    "NavigatorUAData.webidl",
+     "NDEFReader.webidl",
+     "NetErrorInfo.webidl",
+     "NetworkInformation.webidl",
+diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
+index 98b08d00b9..d7a386ed5d 100644
+--- a/dom/workers/WorkerNavigator.cpp
++++ b/dom/workers/WorkerNavigator.cpp
+@@ -5,6 +5,7 @@
+ #include "mozilla/dom/WorkerNavigator.h"
+ #include "MaskConfig.hpp"
+ #include "mozilla/dom/AndroidDevice.h"
++#include "mozilla/dom/NavigatorUAData.h"
+ #include "mozilla/dom/NavigatorManager.h"
+ #include "mozilla/dom/WorkerPrivate.h"
+ 
+@@ -56,6 +57,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(WorkerNavigator)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPermissions)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mServiceWorkerContainer)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mSerial)
++  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mUserAgentData)
+ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
+ 
+ WorkerNavigator::WorkerNavigator(const NavigatorProperties& aProperties,
+@@ -87,6 +89,8 @@ void WorkerNavigator::Invalidate() {
+ 
+   mMediaCapabilities = nullptr;
+ 
++  mUserAgentData = nullptr;
++
+   mWebGpu = nullptr;
+ 
+   if (mLocks) {
+@@ -257,6 +261,17 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+   runnable->Dispatch(workerPrivate, Canceling, aRv);
+ }
+ 
++dom::NavigatorUAData* WorkerNavigator::UserAgentData() {
++  // Only exposed when configured (NavigatorUAData::IsEnabled), and read from
++  // the same config as the window's.
++  if (!mUserAgentData) {
++    WorkerPrivate* workerPrivate = GetCurrentThreadWorkerPrivate();
++    MOZ_ASSERT(workerPrivate);
++    mUserAgentData = new dom::NavigatorUAData(workerPrivate->GlobalScope());
++  }
++  return mUserAgentData;
++}
++
+ double WorkerNavigator::DeviceMemory() const {
+   // Only exposed when configured (AndroidDevice::HasDeviceMemory), and read
+   // from the same place as the window's, so every realm reports one value.
+diff --git a/dom/workers/WorkerNavigator.h b/dom/workers/WorkerNavigator.h
+index a6204c0dd0..2684ddce08 100644
+--- a/dom/workers/WorkerNavigator.h
++++ b/dom/workers/WorkerNavigator.h
+@@ -30,6 +30,7 @@ namespace dom {
+ class StorageManager;
+ class MediaCapabilities;
+ class LockManager;
++class NavigatorUAData;
+ class Permissions;
+ class ServiceWorkerContainer;
+ class Serial;
+@@ -51,6 +52,7 @@ class WorkerNavigator final : public nsWrapperCache {
+   RefPtr<dom::Permissions> mPermissions;
+   RefPtr<ServiceWorkerContainer> mServiceWorkerContainer;
+   RefPtr<dom::Serial> mSerial;
++  RefPtr<dom::NavigatorUAData> mUserAgentData;
+   bool mOnline;
+ 
+   WorkerNavigator(const NavigatorProperties& aProperties, bool aOnline);
+@@ -109,6 +111,7 @@ class WorkerNavigator final : public nsWrapperCache {
+ 
+   uint64_t HardwareConcurrency() const;
+   double DeviceMemory() const;
++  dom::NavigatorUAData* UserAgentData();
+ 
+   StorageManager* Storage();
+ 
+diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
+index 1042d8d15c..67d3211ebb 100644
+--- a/netwerk/protocol/http/nsHttpHandler.cpp
++++ b/netwerk/protocol/http/nsHttpHandler.cpp
+@@ -14,6 +14,8 @@
+ #include "nsHttpConnectionMgr.h"
+ #include "nsHttpHandler.h"
+ #include "MaskConfig.hpp"
++#include "UAClientHints.hpp"
++#include "nsMixedContentBlocker.h"
+ #include "nsHttpChannel.h"
+ #include "nsHTTPCompressConv.h"
+ #include "nsHttpAuthCache.h"
+@@ -745,6 +747,21 @@ nsresult nsHttpHandler::AddStandardRequestHeaders(
+     const nsCString& aLanguageOverride) {
+   nsresult rv;
+ 
++  // Camoufox: User-Agent Client Hints (see UAClientHints.hpp). Added first,
++  // ahead of User-Agent, which is where Chrome puts them, and only to
++  // potentially trustworthy URLs (https, localhost), as Chrome does.
++  if (MaskConfig::ClientHints::Enabled() && aURI &&
++      nsMixedContentBlocker::IsPotentiallyTrustworthyOrigin(aURI)) {
++    for (const auto& [name, value] :
++         MaskConfig::ClientHints::RequestHeaders()) {
++      rv = request->SetHeader(
++          nsHttp::ResolveAtom(nsDependentCString(name.c_str())),
++          nsDependentCString(value.c_str()), false,
++          nsHttpHeaderArray::eVarietyRequestDefault);
++      if (NS_FAILED(rv)) return rv;
++    }
++  }
++
+   // Add the "User-Agent" header
+   rv = request->SetHeader(nsHttp::User_Agent,
+                           UserAgent(aShouldResistFingerprinting), false,

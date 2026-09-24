@@ -1,0 +1,27 @@
+diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
+index 910cf2f324..ae1f700d2c 100644
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -5,6 +5,7 @@
+ #include "mozilla/Logging.h"
+ 
+ #include "gfxFcPlatformFontList.h"
++#include "MaskConfig.hpp"
+ #include "gfxFont.h"
+ #include "gfxFT2Utils.h"
+ #include "gfxPlatform.h"
+@@ -977,6 +978,14 @@ gfxFont* gfxFontconfigFontEntry::CreateFontInstance(
+     FcPatternAddBool(renderPattern, FC_EMBEDDED_BITMAP, FcFalse);
+   }
+ 
++  // Camoufox: Android draws text unhinted -- glyphs keep their outlines and
++  // their fractional advances -- so the emulated device does too, on canvas
++  // and in the page alike.
++  if (MaskConfig::IsAndroidDevice()) {
++    FcPatternDel(renderPattern, FC_HINTING);
++    FcPatternAddBool(renderPattern, FC_HINTING, FcFalse);
++  }
++
+   int loadFlags;
+   unsigned int synthFlags;
+   PrepareFontOptions(renderPattern, &loadFlags, &synthFlags);

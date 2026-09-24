@@ -1,0 +1,19 @@
+diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
+index ae1f700d2c..16bf36cf53 100644
+--- a/gfx/thebes/gfxFcPlatformFontList.cpp
++++ b/gfx/thebes/gfxFcPlatformFontList.cpp
+@@ -986,6 +986,14 @@ gfxFont* gfxFontconfigFontEntry::CreateFontInstance(
+     FcPatternAddBool(renderPattern, FC_HINTING, FcFalse);
+   }
+ 
++  // Camoufox: and with grayscale antialiasing only. Android has no subpixel
++  // (LCD) text; with no subpixel order on the pattern, neither the glyph
++  // rasterizer nor the scaled font (canvas and page text) uses one.
++  if (MaskConfig::IsAndroidDevice()) {
++    FcPatternDel(renderPattern, FC_RGBA);
++    FcPatternAddInteger(renderPattern, FC_RGBA, FC_RGBA_NONE);
++  }
++
+   int loadFlags;
+   unsigned int synthFlags;
+   PrepareFontOptions(renderPattern, &loadFlags, &synthFlags);

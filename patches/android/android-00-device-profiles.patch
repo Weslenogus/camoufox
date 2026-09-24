@@ -1,0 +1,15 @@
+diff --git a/toolkit/toolkit.mozbuild b/toolkit/toolkit.mozbuild
+index 70bf13928f..352c4caba5 100644
+--- a/toolkit/toolkit.mozbuild
++++ b/toolkit/toolkit.mozbuild
+@@ -53,6 +53,10 @@ DIRS += [
+     "/xpcom",
+ ]
+ 
++# Camoufox: the CAMOU_CONFIG layer. MaskConfig.hpp is header-only; the device
++# profiles it expands are compiled once here.
++DIRS += ["/camoucfg"]
++
+ if CONFIG["MOZ_AUTH_EXTENSION"]:
+     DIRS += ["/extensions/auth"]
+ 

@@ -8,8 +8,13 @@ with Files("**"):
     BUG_COMPONENT = ("Core", "DOM: UI Events & Focus Handling")
 
 EXPORTS += [
+    "DeviceProfiles.hpp",
     "MaskConfig.hpp",
     "MouseTrajectories.hpp",
+]
+
+SOURCES += [
+    "DeviceProfiles.cpp",
 ]
 
 LOCAL_INCLUDES += [

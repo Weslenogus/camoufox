@@ -1,0 +1,374 @@
+diff --git a/dom/system/moz.build b/dom/system/moz.build
+index d3c9bd6b76..8e6aeb2c45 100644
+--- a/dom/system/moz.build
++++ b/dom/system/moz.build
+@@ -82,4 +82,7 @@ LOCAL_INCLUDES += [
+     "/xpcom/base",
+ ]
+ 
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
++
+ MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
+diff --git a/dom/system/nsDeviceSensors.cpp b/dom/system/nsDeviceSensors.cpp
+index e9c3911830..63a72e553d 100644
+--- a/dom/system/nsDeviceSensors.cpp
++++ b/dom/system/nsDeviceSensors.cpp
+@@ -6,6 +6,11 @@
+ 
+ #include <cmath>
+ 
++#include "MaskConfig.hpp"
++#include "mozilla/RandomNum.h"
++#include "mozilla/XorShift128PlusRNG.h"
++#include "nsITimer.h"
++
+ #include "mozilla/ErrorResult.h"
+ #include "mozilla/Hal.h"
+ #include "mozilla/HalSensor.h"
+@@ -102,8 +107,13 @@ nsDeviceSensors::nsDeviceSensors() {
+ }
+ 
+ nsDeviceSensors::~nsDeviceSensors() {
++  if (mSyntheticTimer) {
++    mSyntheticTimer->Cancel();
++  }
+   for (int i = 0; i < NUM_SENSOR_TYPE; i++) {
+-    if (IsSensorEnabled(i)) UnregisterSensorObserver((SensorType)i, this);
++    if (IsSensorEnabled(i) && !IsSynthesized(i)) {
++      UnregisterSensorObserver((SensorType)i, this);
++    }
+   }
+ 
+   for (int i = 0; i < NUM_SENSOR_TYPE; i++) {
+@@ -152,6 +162,12 @@ NS_IMETHODIMP nsDeviceSensors::AddWindowListener(uint32_t aType,
+ 
+   if (mWindowListeners[aType]->IndexOf(aWindow) != NoIndex) return NS_OK;
+ 
++  if (IsSynthesized(aType)) {
++    mWindowListeners[aType]->AppendElement(aWindow);
++    UpdateSyntheticTimer();
++    return NS_OK;
++  }
++
+   if (!IsSensorEnabled(aType)) {
+     RegisterSensorObserver((SensorType)aType, this);
+   }
+@@ -172,6 +188,11 @@ NS_IMETHODIMP nsDeviceSensors::RemoveWindowListener(uint32_t aType,
+ 
+   mWindowListeners[aType]->RemoveElement(aWindow);
+ 
++  if (IsSynthesized(aType)) {
++    UpdateSyntheticTimer();
++    return NS_OK;
++  }
++
+   if (mWindowListeners[aType]->Length() == 0)
+     UnregisterSensorObserver((SensorType)aType, this);
+ 
+@@ -558,3 +579,267 @@ bool nsDeviceSensors::IsSensorAllowedByPref(uint32_t aType,
+   return !nsGlobalWindowInner::Cast(window)->ShouldResistFingerprinting(
+       RFPTarget::DeviceSensors);
+ }
++
++// ---------------------------------------------------------------------------
++// Camoufox: synthetic device sensors for an emulated Android device.
++//
++// A desktop has no accelerometer or gyroscope, so an emulated phone needs a
++// sensor stream that looks like one lying still-ish in a hand or on a table:
++//
++//   orientation  beta and gamma sit at a small per-session tilt (inside
++//                "sensors:betaRange" / "sensors:gammaRange", in degrees), alpha
++//                at a random heading; each frame adds gaussian micro-tremor
++//                ("sensors:tremorSigma", degrees).
++//   gravity      accelerationIncludingGravity is gravity *as seen at that
++//                orientation* -- (-g cos b sin c, g sin b, g cos b cos c) for
++//                beta b and gamma c -- so the two streams agree with each
++//                other the way a real device's do, plus gaussian noise
++//                ("sensors:accelSigma", m/s^2). acceleration is that noise
++//                alone.
++//   rotationRate gaussian noise ("sensors:gyroSigma", deg/s).
++//
++// Values are rounded the way Chromium rounds them before they reach a page
++// (services/device/generic_sensor/platform_sensor_util.cc): acceleration and
++// Euler angles to multiples of 0.1, rotation rate to 0.1 degree measured in
++// radians. Events fire at 60 Hz with interval 16, as in Chrome on Android.
++// ---------------------------------------------------------------------------
++
++struct SyntheticDeviceSensors {
++  mozilla::non_crypto::XorShift128PlusRNG mRng;
++  double mAlpha;       // relative heading (deviceorientation)
++  double mAbsAlpha;    // compass heading (deviceorientationabsolute)
++  double mBeta;
++  double mGamma;
++  double mTremorSigma;
++  double mAccelSigma;
++  double mGyroSigma;
++
++  SyntheticDeviceSensors()
++      : mRng(mozilla::RandomUint64OrDie(), mozilla::RandomUint64OrDie()) {
++    // A [low, high] pair from the config, or the default range.
++    auto range = [](const char* aKey, double aLo, double aHi) {
++      const auto& config = MaskConfig::GetJson();
++      if (config.is_object()) {
++        auto values = config.find(aKey);
++        if (values != config.end() && values->is_array() &&
++            values->size() == 2 && (*values)[0].is_number() &&
++            (*values)[1].is_number()) {
++          return std::pair<double, double>((*values)[0].get<double>(),
++                                           (*values)[1].get<double>());
++        }
++      }
++      return std::pair<double, double>(aLo, aHi);
++    };
++    const auto [betaLo, betaHi] = range("sensors:betaRange", 0.0, 5.0);
++    const auto [gammaLo, gammaHi] = range("sensors:gammaRange", 0.0, 2.0);
++    mBeta = Uniform(betaLo, betaHi);
++    mGamma = Uniform(gammaLo, gammaHi);
++    mAlpha = Uniform(0.0, 360.0);
++    mAbsAlpha = Uniform(0.0, 360.0);
++    mTremorSigma = MaskConfig::GetDouble("sensors:tremorSigma").value_or(0.15);
++    mAccelSigma = MaskConfig::GetDouble("sensors:accelSigma").value_or(0.08);
++    mGyroSigma = MaskConfig::GetDouble("sensors:gyroSigma").value_or(0.3);
++  }
++
++  double Uniform(double aLo, double aHi) {
++    return aLo + (aHi - aLo) * mRng.nextDouble();
++  }
++
++  // Box-Muller.
++  double Gaussian(double aSigma) {
++    double u1 = mRng.nextDouble();
++    while (u1 <= 0.0) {
++      u1 = mRng.nextDouble();
++    }
++    const double u2 = mRng.nextDouble();
++    return aSigma * std::sqrt(-2.0 * std::log(u1)) * std::cos(2.0 * M_PI * u2);
++  }
++
++  // Chromium's RoundToMultiple(): round half away from zero.
++  static double RoundToMultiple(double aValue, double aMultiple) {
++    const double scaled = aValue / aMultiple;
++    return aValue < 0.0 ? -aMultiple * std::floor(-scaled + 0.5)
++                        : aMultiple * std::floor(scaled + 0.5);
++  }
++
++  static double WrapDegrees(double aValue) {
++    aValue = std::fmod(aValue, 360.0);
++    return aValue < 0.0 ? aValue + 360.0 : aValue;
++  }
++};
++
++static constexpr double kStandardGravity = 9.80665;
++static constexpr double kAccelerometerRoundingMultiple = 0.1;
++static constexpr double kGyroscopeRoundingMultiple = 0.00174532925199432963;
++static constexpr double kOrientationEulerRoundingMultiple = 0.1;
++static constexpr double kSyntheticIntervalMs = 16.0;
++
++/* static */
++bool nsDeviceSensors::IsSynthesized(uint32_t aType) {
++  if (!MaskConfig::IsAndroidDevice()) {
++    return false;
++  }
++  switch (aType) {
++    case nsIDeviceSensorData::TYPE_ACCELERATION:
++    case nsIDeviceSensorData::TYPE_LINEAR_ACCELERATION:
++    case nsIDeviceSensorData::TYPE_GYROSCOPE:
++    case nsIDeviceSensorData::TYPE_ORIENTATION:
++    case nsIDeviceSensorData::TYPE_ROTATION_VECTOR:
++    case nsIDeviceSensorData::TYPE_GAME_ROTATION_VECTOR:
++      return true;
++    default:
++      return false;
++  }
++}
++
++void nsDeviceSensors::UpdateSyntheticTimer() {
++  bool wanted = false;
++  for (uint32_t type = 0; type < NUM_SENSOR_TYPE; type++) {
++    if (IsSynthesized(type) && IsSensorEnabled(type)) {
++      wanted = true;
++      break;
++    }
++  }
++
++  if (!wanted) {
++    if (mSyntheticTimer) {
++      mSyntheticTimer->Cancel();
++      mSyntheticTimer = nullptr;
++    }
++    return;
++  }
++  if (mSyntheticTimer) {
++    return;
++  }
++  if (!mSynthetic) {
++    mSynthetic = MakeUnique<SyntheticDeviceSensors>();
++  }
++  auto timer = NS_NewTimerWithFuncCallback(
++      SyntheticTick, this, TimeDuration::FromMicroseconds(1e6 / 60.0),
++      nsITimer::TYPE_REPEATING_PRECISE_CAN_SKIP,
++      "nsDeviceSensors::SyntheticTick"_ns);
++  if (timer.isOk()) {
++    mSyntheticTimer = timer.unwrap();
++  }
++}
++
++/* static */
++void nsDeviceSensors::SyntheticTick(nsITimer*, void* aClosure) {
++  RefPtr<nsDeviceSensors> self = static_cast<nsDeviceSensors*>(aClosure);
++  self->FireSyntheticEvents();
++}
++
++void nsDeviceSensors::FireSyntheticEvents() {
++  if (!mSynthetic) {
++    return;
++  }
++  SyntheticDeviceSensors& s = *mSynthetic;
++  using S = SyntheticDeviceSensors;
++
++  // One sample per frame, shared by every window, like one physical device.
++  const double beta = s.mBeta + s.Gaussian(s.mTremorSigma);
++  const double gamma = s.mGamma + s.Gaussian(s.mTremorSigma);
++  const double alpha = s.mAlpha + s.Gaussian(s.mTremorSigma);
++  const double absAlpha = s.mAbsAlpha + s.Gaussian(s.mTremorSigma);
++
++  const double b = beta * M_PI / 180.0;
++  const double c = gamma * M_PI / 180.0;
++  const double gx = -kStandardGravity * std::cos(b) * std::sin(c);
++  const double gy = kStandardGravity * std::sin(b);
++  const double gz = kStandardGravity * std::cos(b) * std::cos(c);
++
++  auto accel = [&](double aValue) {
++    return S::RoundToMultiple(aValue + s.Gaussian(s.mAccelSigma),
++                              kAccelerometerRoundingMultiple);
++  };
++  auto gyro = [&](double aDegPerSec) {
++    // Rounded in rad/s as Chromium does, then reported in deg/s.
++    const double rad = aDegPerSec * M_PI / 180.0;
++    return S::RoundToMultiple(rad, kGyroscopeRoundingMultiple) * 180.0 / M_PI;
++  };
++  auto euler = [](double aValue) {
++    return S::RoundToMultiple(aValue, kOrientationEulerRoundingMultiple);
++  };
++
++  DeviceAccelerationInit acceleration;
++  acceleration.mX.SetValue(accel(0.0));
++  acceleration.mY.SetValue(accel(0.0));
++  acceleration.mZ.SetValue(accel(0.0));
++  DeviceAccelerationInit includingGravity;
++  includingGravity.mX.SetValue(accel(gx));
++  includingGravity.mY.SetValue(accel(gy));
++  includingGravity.mZ.SetValue(accel(gz));
++  DeviceRotationRateInit rotationRate;
++  rotationRate.mAlpha.SetValue(gyro(s.Gaussian(s.mGyroSigma)));
++  rotationRate.mBeta.SetValue(gyro(s.Gaussian(s.mGyroSigma)));
++  rotationRate.mGamma.SetValue(gyro(s.Gaussian(s.mGyroSigma)));
++
++  const double relAlpha = euler(S::WrapDegrees(alpha));
++  const double compass = euler(S::WrapDegrees(absAlpha));
++  const double roundedBeta = euler(beta);
++  const double roundedGamma = euler(gamma);
++  const PRTime timestamp = PR_Now();
++
++  auto collect = [&](std::initializer_list<uint32_t> aTypes) {
++    nsCOMArray<nsIDOMWindow> windows;
++    for (uint32_t type : aTypes) {
++      for (nsIDOMWindow* window : *mWindowListeners[type]) {
++        if (windows.IndexOf(window) < 0) {
++          windows.AppendObject(window);
++        }
++      }
++    }
++    return windows;
++  };
++
++  nsCOMArray<nsIDOMWindow> motionWindows =
++      collect({nsIDeviceSensorData::TYPE_ACCELERATION,
++               nsIDeviceSensorData::TYPE_LINEAR_ACCELERATION,
++               nsIDeviceSensorData::TYPE_GYROSCOPE});
++  for (int32_t i = 0; i < motionWindows.Count(); i++) {
++    nsCOMPtr<nsPIDOMWindowInner> window = do_QueryInterface(motionWindows[i]);
++    if (WindowCannotReceiveSensorEvent(window)) {
++      continue;
++    }
++    nsCOMPtr<Document> doc = window->GetDoc();
++    nsCOMPtr<EventTarget> target = do_QueryInterface(motionWindows[i]);
++    if (!doc || !target) {
++      continue;
++    }
++    IgnoredErrorResult ignored;
++    RefPtr<Event> event =
++        doc->CreateEvent(u"DeviceMotionEvent"_ns, CallerType::System, ignored);
++    if (!event) {
++      continue;
++    }
++    static_cast<DeviceMotionEvent*>(event.get())
++        ->InitDeviceMotionEvent(u"devicemotion"_ns, true, false, acceleration,
++                                includingGravity, rotationRate,
++                                Nullable<double>(kSyntheticIntervalMs),
++                                Nullable<uint64_t>(timestamp));
++    event->SetTrusted(true);
++    target->DispatchEvent(*event);
++  }
++
++  nsCOMArray<nsIDOMWindow> orientationWindows =
++      collect({nsIDeviceSensorData::TYPE_ORIENTATION,
++               nsIDeviceSensorData::TYPE_ROTATION_VECTOR,
++               nsIDeviceSensorData::TYPE_GAME_ROTATION_VECTOR});
++  for (int32_t i = 0; i < orientationWindows.Count(); i++) {
++    nsCOMPtr<nsPIDOMWindowInner> window =
++        do_QueryInterface(orientationWindows[i]);
++    if (WindowCannotReceiveSensorEvent(window)) {
++      continue;
++    }
++    nsCOMPtr<EventTarget> target = do_QueryInterface(orientationWindows[i]);
++    if (!target) {
++      continue;
++    }
++    // Relative first, as Android does with a game rotation vector; that also
++    // stops FireDOMOrientationEvent's desktop compatibility copy.
++    FireDOMOrientationEvent(target, relAlpha, roundedBeta, roundedGamma,
++                            Orientation::kRelative);
++    FireDOMOrientationEvent(target, compass, roundedBeta, roundedGamma,
++                            Orientation::kAbsolute);
++  }
++}
+diff --git a/dom/system/nsDeviceSensors.h b/dom/system/nsDeviceSensors.h
+index 3ee0f4cd4b..9e2e13cf92 100644
+--- a/dom/system/nsDeviceSensors.h
++++ b/dom/system/nsDeviceSensors.h
+@@ -7,6 +7,7 @@
+ 
+ #include "mozilla/HalSensor.h"
+ #include "mozilla/TimeStamp.h"
++#include "mozilla/UniquePtr.h"
+ #include "mozilla/dom/DeviceMotionEvent.h"
+ #include "nsCOMArray.h"
+ #include "nsCOMPtr.h"
+@@ -14,6 +15,8 @@
+ #include "nsTArray.h"
+ 
+ class nsIDOMWindow;
++class nsITimer;
++struct SyntheticDeviceSensors;
+ 
+ namespace mozilla::dom {
+ class Document;
+@@ -60,6 +63,16 @@ class nsDeviceSensors : public nsIDeviceSensors,
+ 
+   bool IsSensorAllowedByPref(uint32_t aType, nsIDOMWindow* aWindow);
+ 
++  // Camoufox: a synthetic 60 Hz motion/orientation source for an emulated
++  // Android device. See nsDeviceSensors.cpp.
++  static bool IsSynthesized(uint32_t aType);
++  void UpdateSyntheticTimer();
++  static void SyntheticTick(nsITimer* aTimer, void* aClosure);
++  void FireSyntheticEvents();
++
++  nsCOMPtr<nsITimer> mSyntheticTimer;
++  mozilla::UniquePtr<SyntheticDeviceSensors> mSynthetic;
++
+   mozilla::TimeStamp mLastDOMMotionEventTime;
+   bool mIsUserProximityNear;
+   mozilla::Maybe<DeviceAccelerationInit> mLastAcceleration;

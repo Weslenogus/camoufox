@@ -1,0 +1,596 @@
+diff --git a/dom/canvas/WebGLShaderValidator.cpp b/dom/canvas/WebGLShaderValidator.cpp
+index 016f86e7e7..1b21f2bb34 100644
+--- a/dom/canvas/WebGLShaderValidator.cpp
++++ b/dom/canvas/WebGLShaderValidator.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "WebGLShaderValidator.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include <string>
+ #include <vector>
+ 
+@@ -70,6 +72,11 @@ static ShCompileOptions ChooseValidatorCompileOptions(
+ 
+   // -
+ 
++  // Camoufox: run mediump at half precision, as a mobile GPU does.
++  if (MaskConfig::CheckBool("webGl:emulateMediumpPrecision")) {
++    options.emulateMediumpPrecision = true;
++  }
++
+   if (resources.MaxExpressionComplexity > 0) {
+     options.limitExpressionComplexity = true;
+   }
+diff --git a/gfx/angle/checkout/include/GLSLANG/ShaderLang.h b/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
+index b120b7539c..0f4ae184b7 100644
+--- a/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
++++ b/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
+@@ -418,6 +418,10 @@ struct ShCompileOptions
+     // limits must be supplied in the BuiltinResources.
+     uint64_t validatePerStageMaxUniformBlocks : 1;
+ 
++    // Camoufox: round mediump and lowp float results in fragment shaders to
++    // half precision, as a mobile GPU evaluates them (EmulateMediumpPrecision).
++    uint64_t emulateMediumpPrecision : 1;
++
+     ShCompileOptionsMetal metal;
+     ShCompileOptionsPLS pls;
+ };
+diff --git a/gfx/angle/checkout/src/compiler/translator/Compiler.cpp b/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
+index 05c1f8eb6a..333981e5bf 100644
+--- a/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
++++ b/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
+@@ -25,6 +25,7 @@
+ #include "compiler/translator/ValidateVaryingLocations.h"
+ #include "compiler/translator/VariablePacker.h"
+ #include "compiler/translator/tree_ops/ClampIndirectIndices.h"
++#include "compiler/translator/tree_ops/EmulateMediumpPrecision.h"
+ #include "compiler/translator/tree_ops/ClampPointSize.h"
+ #include "compiler/translator/tree_ops/DeclareAndInitBuiltinsForInstancedMultiview.h"
+ #include "compiler/translator/tree_ops/DeferGlobalInitializers.h"
+@@ -861,6 +862,15 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
+         }
+     }
+ 
++    // Camoufox: evaluate mediump like a mobile GPU (see EmulateMediumpPrecision).
++    if (compileOptions.emulateMediumpPrecision && mShaderType == GL_FRAGMENT_SHADER)
++    {
++        if (!EmulateMediumpPrecision(this, root, &mSymbolTable))
++        {
++            return false;
++        }
++    }
++
+     if (compileOptions.initializeBuiltinsForInstancedMultiview &&
+         (parseContext.isExtensionEnabled(TExtension::OVR_multiview2) ||
+          parseContext.isExtensionEnabled(TExtension::OVR_multiview)) &&
+diff --git a/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
+new file mode 100644
+index 0000000000..6a664051fe
+--- /dev/null
++++ b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
+@@ -0,0 +1,476 @@
++//
++// Copyright 2026 The ANGLE Project Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++//
++// EmulateMediumpPrecision.cpp: Round mediump and lowp float results in a
++// fragment shader to IEEE half precision.
++//
++// Desktop GPUs evaluate every float at 32 bits whatever its precision
++// qualifier. Mobile GPUs evaluate mediump (and lowp) at 16 bits, so a
++// fragment shader that computes at mediump produces visibly different pixels
++// on a phone -- and WebGL fingerprinting reads exactly those pixels. This pass
++// makes a desktop GPU produce the phone's values: every mediump/lowp float
++// value a fragment shader computes, and every value stored into a mediump/lowp
++// float, passes through a helper that keeps only the top 10 mantissa bits of
++// an IEEE half (11 significant bits, exponent range 2^-24 .. 65504):
++//
++//     c = clamp(x, -65504, 65504)       // half's finite range
++//     a = abs(c)
++//     m = max(a, 2^-14)                 // below 2^-14 the step is fixed: subnormals
++//     q = exp2(floor(log2(m)) - 10)     // one unit in the last place
++//     (q corrected by one binade if log2 rounded across a power of two)
++//     return sign(c) * floor(a / q) * q // truncate to that unit
++//
++// Every step is exact in 32-bit float: q is a power of two, so a / q and the
++// product are exact, and the corrections make the result independent of how
++// the driver rounds log2.
++//
++// What is rounded:
++//   * arithmetic (+ - * /, vector*scalar, vector*matrix, matrix*vector) whose
++//     result is a mediump/lowp float scalar or vector;
++//   * math built-ins (sin, pow, dot, normalize, mix, ...) with such a result;
++//   * compound assignments to such a variable (x += y becomes x = round(x + y));
++//   * higher-precision values assigned or initialized into such a variable;
++//   * reads of mediump/lowp float uniforms and inputs (a phone loads them into
++//     16-bit registers).
++// Float constants taking part in any of these are truncated the same way at
++// compile time (a phone narrows literals too). Constant expressions are
++// folded before this pass runs, and nothing at global scope is touched: only
++// constant expressions may appear there.
++//
++
++#include "compiler/translator/tree_ops/EmulateMediumpPrecision.h"
++
++#include <algorithm>
++#include <array>
++#include <cmath>
++#include <vector>
++
++#include "compiler/translator/Compiler.h"
++#include "compiler/translator/SymbolTable.h"
++#include "compiler/translator/tree_util/FindFunction.h"
++#include "compiler/translator/tree_util/IntermNode_util.h"
++#include "compiler/translator/tree_util/IntermTraverse.h"
++
++namespace sh
++{
++namespace
++{
++
++// Half's largest finite value and smallest normal value.
++constexpr float kHalfMax       = 65504.0f;
++constexpr float kHalfMinNormal = 6.103515625e-05f;  // 2^-14
++// Explicit mantissa bits of a half.
++constexpr float kHalfMantissaBits = 10.0f;
++
++bool IsReducedPrecisionFloat(const TType &type)
++{
++    return type.getBasicType() == EbtFloat && !type.isMatrix() && !type.isArray() &&
++           type.getStruct() == nullptr &&
++           (type.getPrecision() == EbpMedium || type.getPrecision() == EbpLow);
++}
++
++bool IsRoundedArithmetic(TOperator op)
++{
++    switch (op)
++    {
++        case EOpAdd:
++        case EOpSub:
++        case EOpMul:
++        case EOpDiv:
++        case EOpVectorTimesScalar:
++        case EOpVectorTimesMatrix:
++        case EOpMatrixTimesVector:
++            return true;
++        default:
++            return false;
++    }
++}
++
++TOperator ArithmeticOpOfCompoundAssignment(TOperator op)
++{
++    switch (op)
++    {
++        case EOpAddAssign:
++            return EOpAdd;
++        case EOpSubAssign:
++            return EOpSub;
++        case EOpMulAssign:
++            return EOpMul;
++        case EOpDivAssign:
++            return EOpDiv;
++        case EOpVectorTimesScalarAssign:
++            return EOpVectorTimesScalar;
++        case EOpVectorTimesMatrixAssign:
++            return EOpVectorTimesMatrix;
++        default:
++            return EOpNull;
++    }
++}
++
++bool IsLoadedAtReducedPrecision(TQualifier qualifier)
++{
++    switch (qualifier)
++    {
++        case EvqUniform:
++        case EvqVaryingIn:
++        case EvqFragmentIn:
++        case EvqSmoothIn:
++        case EvqFlatIn:
++        case EvqNoPerspectiveIn:
++        case EvqCentroidIn:
++        case EvqSampleIn:
++            return true;
++        default:
++            return false;
++    }
++}
++
++// The rounding the helper function performs, done at compile time for
++// constants: a phone converts a literal to half before it takes part in
++// mediump arithmetic, and so must we, or the constant would carry 13 bits the
++// device never had.
++float TruncateToHalf(float value)
++{
++    if (std::isnan(value) || std::isinf(value))
++    {
++        return value;
++    }
++    const float c = std::clamp(value, -kHalfMax, kHalfMax);
++    const float a = std::fabs(c);
++    int exponent  = 0;
++    std::frexp(std::max(a, kHalfMinNormal), &exponent);  // m = f * 2^exponent, f in [0.5, 1)
++    const float q =
++        std::ldexp(1.0f, exponent - 1 - static_cast<int>(kHalfMantissaBits));
++    return std::copysign(std::floor(a / q) * q, c);
++}
++
++// Builds, on first use, one rounding function per vector size and precision,
++// and the calls to them.
++class HalfRounder : angle::NonCopyable
++{
++  public:
++    HalfRounder(TSymbolTable *symbolTable, int shaderVersion)
++        : mSymbolTable(symbolTable), mShaderVersion(shaderVersion)
++    {
++        mFunctions.fill(nullptr);
++    }
++
++    // Rounds `value` to half precision. The helper's parameter and result
++    // carry `precision`, the precision the value is being narrowed to; the
++    // argument itself may be of higher precision, which GLSL allows.
++    TIntermTyped *round(TIntermTyped *value, TPrecision precision)
++    {
++        ASSERT(value->getType().getBasicType() == EbtFloat);
++        ASSERT(precision == EbpMedium || precision == EbpLow);
++        const TFunction *function =
++            getFunction(value->getType().getNominalSize(), precision);
++        TIntermSequence args = {value};
++        return TIntermAggregate::CreateFunctionCall(*function, &args);
++    }
++
++    TIntermTyped *round(TIntermTyped *value)
++    {
++        return round(value, value->getType().getPrecision());
++    }
++
++    void insertDefinitions(TIntermBlock *root)
++    {
++        if (mDefinitions.empty())
++        {
++            return;
++        }
++        root->insertChildNodes(FindFirstFunctionDefinitionIndex(root), mDefinitions);
++    }
++
++  private:
++    const TFunction *getFunction(uint8_t size, TPrecision precision)
++    {
++        ASSERT(size >= 1 && size <= 4);
++        const size_t index = (precision == EbpLow ? 4u : 0u) + (size - 1u);
++        if (mFunctions[index] == nullptr)
++        {
++            mFunctions[index] = createFunction(size, precision);
++        }
++        return mFunctions[index];
++    }
++
++    TIntermTyped *splat(float value, uint8_t size) const
++    {
++        if (size == 1)
++        {
++            return CreateFloatNode(value, EbpHigh);
++        }
++        const float values[4] = {value, value, value, value};
++        return CreateVecNode(values, size, EbpHigh);
++    }
++
++    TIntermTyped *call(const char *name, TIntermSequence args) const
++    {
++        return CreateBuiltInFunctionCallNode(name, &args, *mSymbolTable, mShaderVersion);
++    }
++
++    static TIntermTyped *binary(TOperator op, TIntermTyped *left, TIntermTyped *right)
++    {
++        return new TIntermBinary(op, left, right);
++    }
++
++    const TFunction *createFunction(uint8_t size, TPrecision precision)
++    {
++        TType *paramType  = new TType(EbtFloat, precision, EvqParamIn, size);
++        TType *returnType = new TType(EbtFloat, precision, EvqTemporary, size);
++        TType *workType   = new TType(EbtFloat, EbpHigh, EvqTemporary, size);
++
++        TFunction *function = new TFunction(mSymbolTable, kEmptyImmutableString,
++                                            SymbolType::AngleInternal, returnType, true);
++        TVariable *x        = CreateTempVariable(mSymbolTable, paramType);
++        function->addParameter(x);
++
++        TIntermBlock *body = new TIntermBlock;
++        auto declare       = [&](TIntermTyped *init) {
++            TVariable *var = CreateTempVariable(mSymbolTable, workType);
++            body->appendStatement(CreateTempInitDeclarationNode(var, init));
++            return var;
++        };
++        auto ref = [](const TVariable *var) { return CreateTempSymbolNode(var); };
++
++        // c = clamp(x, -max, max); a = abs(c); m = max(a, minNormal)
++        const TVariable *c = declare(call(
++            "clamp", {CreateTempSymbolNode(x), splat(-kHalfMax, size), splat(kHalfMax, size)}));
++        const TVariable *a = declare(call("abs", {ref(c)}));
++        const TVariable *m = declare(call("max", {ref(a), splat(kHalfMinNormal, size)}));
++
++        // q = exp2(floor(log2(m)) - 10)
++        const TVariable *q = declare(call(
++            "exp2", {binary(EOpSub, call("floor", {call("log2", {ref(m)})}),
++                            splat(kHalfMantissaBits, size))}));
++
++        // log2 rounded up across a power of two: m < 2^(e+10), so q is one
++        // binade too large.  q *= mix(0.5, 1.0, step(q * 1024, m))
++        body->appendStatement(CreateTempAssignmentNode(
++            q, binary(EOpMul, ref(q),
++                      call("mix", {splat(0.5f, size), splat(1.0f, size),
++                                   call("step", {binary(EOpMul, ref(q), splat(1024.0f, size)),
++                                                 ref(m)})}))));
++        // log2 rounded down: m >= 2^(e+11), so q is one binade too small.
++        // q *= mix(1.0, 2.0, step(q * 2048, m))
++        body->appendStatement(CreateTempAssignmentNode(
++            q, binary(EOpMul, ref(q),
++                      call("mix", {splat(1.0f, size), splat(2.0f, size),
++                                   call("step", {binary(EOpMul, ref(q), splat(2048.0f, size)),
++                                                 ref(m)})}))));
++
++        // return sign(c) * (floor(a / q) * q)
++        TIntermTyped *truncated =
++            binary(EOpMul, call("floor", {binary(EOpDiv, ref(a), ref(q))}), ref(q));
++        body->appendStatement(
++            new TIntermBranch(EOpReturn, binary(EOpMul, call("sign", {ref(c)}), truncated)));
++
++        mDefinitions.push_back(CreateInternalFunctionDefinitionNode(*function, body));
++        return function;
++    }
++
++    TSymbolTable *mSymbolTable;
++    const int mShaderVersion;
++    std::array<const TFunction *, 8> mFunctions;
++    TIntermSequence mDefinitions;
++};
++
++// Pass 1: x op= y  ->  x = x op y, for a mediump/lowp float variable x, so that
++// pass 2 rounds the arithmetic. Only a plain variable on the left is
++// rewritten: anything else could have side effects that must not run twice.
++class ExpandCompoundAssignmentsTraverser : public TIntermTraverser
++{
++  public:
++    ExpandCompoundAssignmentsTraverser() : TIntermTraverser(true, false, true) {}
++
++    bool visitBinary(Visit visit, TIntermBinary *node) override
++    {
++        const TOperator arithmeticOp = ArithmeticOpOfCompoundAssignment(node->getOp());
++        if (arithmeticOp == EOpNull || !IsReducedPrecisionFloat(node->getType()) ||
++            node->getLeft()->getAsSymbolNode() == nullptr)
++        {
++            return true;
++        }
++
++        if (visit == PreVisit)
++        {
++            mQueuedAtEntry.push_back(mReplacements.size());
++            return true;
++        }
++
++        // A replacement inside this node's operands would be applied to the
++        // node this one drops; leave such (rare) nested cases unexpanded.
++        const size_t queuedAtEntry = mQueuedAtEntry.back();
++        mQueuedAtEntry.pop_back();
++        if (mReplacements.size() != queuedAtEntry)
++        {
++            return true;
++        }
++
++        TIntermTyped *left = node->getLeft();
++        TIntermBinary *arithmetic =
++            new TIntermBinary(arithmeticOp, left->deepCopy(), node->getRight());
++        queueReplacement(new TIntermBinary(EOpAssign, left, arithmetic),
++                         OriginalNode::IS_DROPPED);
++        return true;
++    }
++
++  private:
++    std::vector<size_t> mQueuedAtEntry;
++};
++
++// Pass 2: wrap every reduced-precision float result in the rounding helper.
++// Post-order, so a node's operands are queued before the node itself, and
++// the node becomes the helper call's argument.
++class RoundReducedPrecisionTraverser : public TIntermTraverser
++{
++  public:
++    RoundReducedPrecisionTraverser(HalfRounder *rounder)
++        : TIntermTraverser(false, false, true), mRounder(rounder)
++    {}
++
++    void visitSymbol(TIntermSymbol *node) override
++    {
++        if (mInGlobalScope || !IsReducedPrecisionFloat(node->getType()) ||
++            !IsLoadedAtReducedPrecision(node->getType().getQualifier()))
++        {
++            return;
++        }
++        // Only reads: skip the declaration itself.
++        TIntermNode *parent = getParentNode();
++        if (parent == nullptr || parent->getAsDeclarationNode() != nullptr)
++        {
++            return;
++        }
++        queueReplacement(mRounder->round(node), OriginalNode::BECOMES_CHILD);
++    }
++
++    bool visitBinary(Visit visit, TIntermBinary *node) override
++    {
++        if (mInGlobalScope)
++        {
++            return true;
++        }
++
++        const TOperator op = node->getOp();
++        if (IsRoundedArithmetic(op))
++        {
++            if (IsReducedPrecisionFloat(node->getType()))
++            {
++                narrowConstantOperands(node);
++                queueReplacement(mRounder->round(node), OriginalNode::BECOMES_CHILD);
++            }
++            return true;
++        }
++
++        if (op == EOpAssign || op == EOpInitialize)
++        {
++            // A value computed at higher precision is narrowed when it is
++            // stored into a reduced-precision variable.
++            TIntermTyped *right = node->getRight();
++            if (!IsReducedPrecisionFloat(node->getLeft()->getType()))
++            {
++                return true;
++            }
++            if (right->getAsConstantUnion() != nullptr)
++            {
++                narrowConstant(node, right);
++            }
++            else if (right->getType().getBasicType() == EbtFloat &&
++                     right->getType().getPrecision() == EbpHigh)
++            {
++                TIntermTyped *narrowed =
++                    mRounder->round(right, node->getLeft()->getType().getPrecision());
++                queueReplacementWithParent(node, right, narrowed, OriginalNode::BECOMES_CHILD);
++            }
++        }
++        return true;
++    }
++
++    bool visitUnary(Visit visit, TIntermUnary *node) override
++    {
++        if (!mInGlobalScope && BuiltInGroup::IsMath(node->getOp()) &&
++            IsReducedPrecisionFloat(node->getType()))
++        {
++            narrowConstantOperands(node);
++            queueReplacement(mRounder->round(node), OriginalNode::BECOMES_CHILD);
++        }
++        return true;
++    }
++
++    bool visitAggregate(Visit visit, TIntermAggregate *node) override
++    {
++        if (!mInGlobalScope && BuiltInGroup::IsMath(node->getOp()) &&
++            IsReducedPrecisionFloat(node->getType()))
++        {
++            narrowConstantOperands(node);
++            queueReplacement(mRounder->round(node), OriginalNode::BECOMES_CHILD);
++        }
++        return true;
++    }
++
++  private:
++    // Replaces a float constant operand of `parent` with its half-precision
++    // value, when that differs.
++    void narrowConstant(TIntermNode *parent, TIntermNode *operand)
++    {
++        TIntermConstantUnion *constant = operand->getAsConstantUnion();
++        if (constant == nullptr || constant->getBasicType() != EbtFloat)
++        {
++            return;
++        }
++        const size_t size            = constant->getType().getObjectSize();
++        const TConstantUnion *values = constant->getConstantValue();
++        TConstantUnion *narrowed     = new TConstantUnion[size];
++        bool changed                 = false;
++        for (size_t i = 0; i < size; ++i)
++        {
++            const float value = TruncateToHalf(values[i].getFConst());
++            changed |= value != values[i].getFConst();
++            narrowed[i].setFConst(value);
++        }
++        if (changed)
++        {
++            queueReplacementWithParent(
++                parent, constant, new TIntermConstantUnion(narrowed, constant->getType()),
++                OriginalNode::IS_DROPPED);
++        }
++    }
++
++    void narrowConstantOperands(TIntermOperator *node)
++    {
++        for (size_t i = 0; i < node->getChildCount(); ++i)
++        {
++            narrowConstant(node, node->getChildNode(i));
++        }
++    }
++
++    HalfRounder *mRounder;
++};
++
++}  // anonymous namespace
++
++bool EmulateMediumpPrecision(TCompiler *compiler, TIntermBlock *root, TSymbolTable *symbolTable)
++{
++    ExpandCompoundAssignmentsTraverser expand;
++    root->traverse(&expand);
++    if (!expand.updateTree(compiler, root))
++    {
++        return false;
++    }
++
++    HalfRounder rounder(symbolTable, compiler->getShaderVersion());
++    RoundReducedPrecisionTraverser round(&rounder);
++    root->traverse(&round);
++    if (!round.updateTree(compiler, root))
++    {
++        return false;
++    }
++
++    rounder.insertDefinitions(root);
++    return compiler->validateAST(root);
++}
++
++}  // namespace sh
+diff --git a/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
+new file mode 100644
+index 0000000000..efc7a27ba6
+--- /dev/null
++++ b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
+@@ -0,0 +1,28 @@
++//
++// Copyright 2026 The ANGLE Project Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++//
++// EmulateMediumpPrecision.h: Round mediump and lowp float results in a fragment
++// shader to IEEE half precision, the width a mobile GPU evaluates them at.
++//
++
++#ifndef COMPILER_TRANSLATOR_TREEOPS_EMULATEMEDIUMPPRECISION_H_
++#define COMPILER_TRANSLATOR_TREEOPS_EMULATEMEDIUMPPRECISION_H_
++
++#include "common/angleutils.h"
++
++namespace sh
++{
++
++class TCompiler;
++class TIntermBlock;
++class TSymbolTable;
++
++[[nodiscard]] bool EmulateMediumpPrecision(TCompiler *compiler,
++                                           TIntermBlock *root,
++                                           TSymbolTable *symbolTable);
++
++}  // namespace sh
++
++#endif  // COMPILER_TRANSLATOR_TREEOPS_EMULATEMEDIUMPPRECISION_H_
+diff --git a/gfx/angle/targets/translator/moz.build b/gfx/angle/targets/translator/moz.build
+index 4b59b82403..e5b331ad19 100644
+--- a/gfx/angle/targets/translator/moz.build
++++ b/gfx/angle/targets/translator/moz.build
+@@ -227,6 +227,7 @@ SOURCES += [
+     "../../checkout/src/compiler/translator/tree_ops/DeclareAndInitBuiltinsForInstancedMultiview.cpp",
+     "../../checkout/src/compiler/translator/tree_ops/DeferGlobalInitializers.cpp",
+     "../../checkout/src/compiler/translator/tree_ops/EmulateGLFragColorBroadcast.cpp",
++    "../../checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp",
+     "../../checkout/src/compiler/translator/tree_ops/EmulateMultiDrawShaderBuiltins.cpp",
+     "../../checkout/src/compiler/translator/tree_ops/FoldExpressions.cpp",
+     "../../checkout/src/compiler/translator/tree_ops/ForcePrecisionQualifier.cpp",

@@ -1,0 +1,138 @@
+diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
+index 918f8ef045..5824f8704f 100644
+--- a/dom/events/PointerEventHandler.cpp
++++ b/dom/events/PointerEventHandler.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "PointerEventHandler.h"
+ 
++#include <cmath>
++
+ #include "EventStateManager.h"
+ #include "PointerEvent.h"
+ #include "PointerLockManager.h"
+@@ -23,6 +25,10 @@
+ #include "nsRFPService.h"
+ #include "nsUserCharacteristics.h"
+ 
++#include "mozilla/ClearOnShutdown.h"
++#include "mozilla/EventDispatcher.h"
++#include "mozilla/StaticPtr.h"
++#include "mozilla/TouchEvents.h"
+ #include "mozilla/dom/Touch.h"
+ 
+ namespace mozilla {
+@@ -983,6 +989,99 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
+ // is tracked under; touch identifiers are small non-negative integers.
+ static constexpr int32_t kEmulatedFingerForMouse = -1;
+ 
++// Camoufox: the finger of InitPointerEventFromMouse fires touch events too.
++//
++// A finger on a touchscreen fires touchstart / touchmove / touchend as well as
++// pointer events, and pages listen for either. Mouse input that automation
++// synthesizes on an emulated Android device already reaches the page as a
++// finger's pointer events; right after each one, the matching touch event is
++// dispatched -- trusted, like any event the browser itself generates -- to the
++// element the gesture started on, carrying the same contact geometry. Gecko's
++// mouse events (the compatibility mouse events a tap produces) follow as
++// before.
++static StaticRefPtr<nsIContent> sEmulatedTouchTarget;
++static constexpr int32_t kEmulatedTouchIdentifier = 0;
++
++static void DispatchEmulatedTouchForMouse(PresShell* aShell,
++                                          nsIContent* aTarget,
++                                          const WidgetMouseEvent& aMouseEvent,
++                                          EventMessage aPointerMessage) {
++  if (!dom::Touch::EmulatesFingers() ||
++      !aMouseEvent.mFlags.mIsSynthesizedForTests ||
++      aMouseEvent.mInputSource == MouseEvent_Binding::MOZ_SOURCE_TOUCH ||
++      !aShell) {
++    return;
++  }
++  EventMessage touchMessage;
++  switch (aPointerMessage) {
++    case ePointerDown:
++      if (aMouseEvent.mButton != MouseButton::ePrimary) {
++        return;
++      }
++      touchMessage = eTouchStart;
++      break;
++    case ePointerMove:
++      if (!(aMouseEvent.mButtons & MouseButtonsFlag::ePrimaryFlag) ||
++          !sEmulatedTouchTarget) {
++        return;
++      }
++      touchMessage = eTouchMove;
++      break;
++    case ePointerUp:
++      if (aMouseEvent.mButton != MouseButton::ePrimary ||
++          !sEmulatedTouchTarget) {
++        return;
++      }
++      touchMessage = eTouchEnd;
++      break;
++    default:
++      return;
++  }
++
++  if (touchMessage == eTouchStart) {
++    // A touch targets an element, and keeps the element it started on.
++    nsIContent* target = aTarget;
++    while (target && !target->IsElement()) {
++      target = target->GetFlattenedTreeParent();
++    }
++    if (!target) {
++      return;
++    }
++    if (!sEmulatedTouchTarget) {
++      ClearOnShutdown(&sEmulatedTouchTarget);
++    }
++    sEmulatedTouchTarget = target;
++  }
++  nsCOMPtr<nsIContent> target = sEmulatedTouchTarget.get();
++  if (touchMessage == eTouchEnd) {
++    sEmulatedTouchTarget = nullptr;
++  }
++  nsPresContext* presContext = aShell->GetPresContext();
++  if (!presContext || !target->IsInComposedDoc()) {
++    return;
++  }
++
++  // The same finger as the pointer event just dispatched.
++  const dom::Touch::EmulatedFinger finger =
++      dom::Touch::FingerFor(kEmulatedFingerForMouse, false);
++  const float scale = presContext->CSSToDevPixelScale().scale;
++  RefPtr<dom::Touch> touch = new dom::Touch(
++      kEmulatedTouchIdentifier, aMouseEvent.mRefPoint,
++      LayoutDeviceIntPoint(int32_t(std::lround(finger.mRadiusX * scale)),
++                           int32_t(std::lround(finger.mRadiusY * scale))),
++      finger.mRotationAngle, finger.mForce);
++  touch->SetTouchTarget(target);
++  touch->mChanged = true;
++
++  WidgetTouchEvent touchEvent(true, touchMessage, aMouseEvent.mWidget);
++  touchEvent.mModifiers = aMouseEvent.mModifiers;
++  touchEvent.mTimeStamp = aMouseEvent.mTimeStamp;
++  touchEvent.mTouches.AppendElement(touch);
++  nsEventStatus status = nsEventStatus_eIgnore;
++  EventDispatcher::Dispatch(target, presContext, &touchEvent, nullptr,
++                            &status);
++}
++
+ /* static */
+ void PointerEventHandler::InitPointerEventFromMouse(
+     WidgetPointerEvent* aPointerEvent, const WidgetMouseEvent* aMouseEvent,
+@@ -1383,6 +1482,13 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
+     // dispatch mouse boundary events later.
+     mouseEvent->mSynthesizeMoveAfterDispatch |=
+         event.mSynthesizeMoveAfterDispatch;
++    // Camoufox: the emulated finger's touch event (see above).
++    DispatchEmulatedTouchForMouse(
++        shell,
++        aEventTargetContent
++            ? aEventTargetContent
++            : (aEventTargetFrame ? aEventTargetFrame->GetContent() : nullptr),
++        *mouseEvent, pointerMessage);
+   } else if (aMouseOrTouchEvent->mClass == eTouchEventClass) {
+     WidgetTouchEvent* touchEvent = aMouseOrTouchEvent->AsTouchEvent();
+     // loop over all touches and dispatch pointer events on each touch
