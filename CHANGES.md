@@ -663,6 +663,7 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-media-devices.py`: L26-33, L35, L59-62, L64
 - `tests/patches/android-network-headers.py`: L125, L127-131
 - `tests/patches/android-permissions.py`: L6-8, L59, L61-62
+- `tests/patches/android-storage.py`: L31-34, L40
 - `tests/patches/android-touch.py`: L18-20, L86-87, L89-93, L96-99, L101, L103-104, L153
 - `tests/patches/android-voices.py`: L14-20, L65-72, L74-75, L77, L93
 - `tests/patches/android-webgl.py`: L98-103, L105-106, L108

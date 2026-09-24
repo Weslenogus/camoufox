@@ -28,13 +28,16 @@ PROBE = r"""async () => {
   const shape = e => ({quota: e.quota, usage: e.usage, usageDetails: e.usageDetails || null});
   const before = shape(await navigator.storage.estimate());
   const worker = await new Promise(r => { new Worker('/w.js').onmessage = e => r(e.data); });
-  // Store ~1 MB in IndexedDB; usage must move with it.
+  // Store 1 MB in IndexedDB; usage must move with it. Random bytes: IndexedDB
+  // compresses what it stores, and a constant fill would shrink to nothing.
+  const data = new Uint8Array(1 << 20);
+  for (let i = 0; i < data.length; i += 65536) crypto.getRandomValues(data.subarray(i, i + 65536));
   await new Promise((resolve, reject) => {
     const open = indexedDB.open('guard', 1);
     open.onupgradeneeded = () => open.result.createObjectStore('s');
     open.onsuccess = () => {
       const tx = open.result.transaction('s', 'readwrite');
-      tx.objectStore('s').put(new Uint8Array(1 << 20).fill(7), 'blob');
+      tx.objectStore('s').put(data, 'blob');
       tx.oncomplete = () => { open.result.close(); resolve(); };
       tx.onerror = () => reject(tx.error);
     };
