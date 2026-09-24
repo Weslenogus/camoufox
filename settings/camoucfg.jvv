@@ -346,5 +346,21 @@
     "touch:radiusRange": "array[double, 2]",
     "touch:radiusYDelta": "double[>=0]",
     "touch:rotationRange": "array[double, 2]",
-    "touch:forceRange": "array[double, 2]"
+    "touch:forceRange": "array[double, 2]",
+    "mediaDevices:cameras": "array[@CAMERA]",
+    "@CAMERA": {
+        "*label": "str",
+        "facingMode": "str[user, environment, left, right]",
+        "width": "int[>0]",
+        "height": "int[>0]",
+        "frameRate": "double[>0]",
+        "zoom": {
+            "*min": "double",
+            "*max": "double",
+            "step": "double"
+        },
+        "torch": "bool",
+        "focusMode": "array[str]",
+        "exposureMode": "array[str]"
+    }
 }

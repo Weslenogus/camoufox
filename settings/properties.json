@@ -139,5 +139,6 @@
   { "property": "touch:radiusRange", "type": "array" },
   { "property": "touch:radiusYDelta", "type": "double" },
   { "property": "touch:rotationRange", "type": "array" },
-  { "property": "touch:forceRange", "type": "array" }
+  { "property": "touch:forceRange", "type": "array" },
+  { "property": "mediaDevices:cameras", "type": "array" }
 ]

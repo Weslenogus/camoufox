@@ -259,3 +259,36 @@ the legacy touch APIs Android has are enabled through `device:prefs`.
 - `settings/camoucfg.jvv`: L345-349
 - `settings/properties.json`: L138-142
 - `tests/patches/android-touch.py`: new file, L1-150
+
+## Task 9 - Cameras, microphone and speaker
+
+The phone's capture devices in place of the host's, for `enumerateDevices()`
+and `getUserMedia()` alike, so an id from one works in the other: the default
+microphone and speaker (deviceId "default", label "Default") and the Camera2
+devices in Chrome's order -- "camera2 1, facing front" (user) before
+"camera2 0, facing back" (environment) -- from `mediaDevices:cameras`. Ids are
+Chrome's 64 lowercase hex digits. Inputs are `InputDeviceInfo` (new interface)
+with `getCapabilities()`: empty before permission, then capture formats and
+facing mode; a running track adds the Image Capture controls (back: zoom
+1-8 step 0.1, torch, focus and exposure modes; front: no zoom or torch).
+Before permission one anonymous device per kind is listed, as in Chrome.
+Captures stream synthetic frames and tone -- never the host's devices -- and
+`facingMode` constraints select the matching camera.
+
+- `patches/android/android-09-media-devices.patch` (patch; lines in the patched source tree):
+  - `dom/bindings/Bindings.conf`: L400-404
+  - `dom/media/AndroidMediaDevices.cpp`: L1-296
+  - `dom/media/AndroidMediaDevices.h`: L1-66
+  - `dom/media/MediaDeviceInfo.cpp`: L7, L9, L43-71
+  - `dom/media/MediaDeviceInfo.h`: L10, L22-23, L42-44, L50, L52-71
+  - `dom/media/MediaDevices.cpp`: L7, L347-379, L538, L540-559
+  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1195, L2437-2466, L3477-3483
+  - `dom/media/moz.build`: L264
+  - `dom/media/webrtc/MediaEngineFake.cpp`: L7-8, L89-92, L141-143, L146-149, L153-156, L164, L186, L217-220, L635-636
+  - `dom/webidl/InputDeviceInfo.webidl`: L1-15
+  - `dom/webidl/MediaTrackCapabilities.webidl`: L9, L22-33, L37, L41-42, L51-57
+  - `dom/webidl/moz.build`: L770
+- `additions/camoucfg/DeviceProfiles.cpp`: L131-153
+- `settings/camoucfg.jvv`: L349-365
+- `settings/properties.json`: L142-143
+- `tests/patches/android-media-devices.py`: new file, L1-136

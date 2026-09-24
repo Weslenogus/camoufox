@@ -1,0 +1,866 @@
+diff --git a/dom/bindings/Bindings.conf b/dom/bindings/Bindings.conf
+index f75e813e05..50b431b798 100644
+--- a/dom/bindings/Bindings.conf
++++ b/dom/bindings/Bindings.conf
+@@ -397,6 +397,11 @@ DOMInterfaces = {
+     'nativeType' : 'mozilla::dom::HTMLSharedListElement'
+ },
+ 
++'InputDeviceInfo': {
++    # Camoufox: defined with MediaDeviceInfo (Android device profiles).
++    'headerFile': 'mozilla/dom/MediaDeviceInfo.h',
++},
++
+ 'IDBCursor': {
+     'implicitJSContext': [ 'delete' ],
+     'concrete': True,
+diff --git a/dom/media/AndroidMediaDevices.cpp b/dom/media/AndroidMediaDevices.cpp
+new file mode 100644
+index 0000000000..11f290b5da
+--- /dev/null
++++ b/dom/media/AndroidMediaDevices.cpp
+@@ -0,0 +1,296 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++#include "AndroidMediaDevices.h"
++
++#include <string>
++#include <vector>
++
++#include "AudioDeviceInfo.h"
++#include "MaskConfig.hpp"
++#include "mozilla/Base64.h"
++#include "mozilla/dom/MediaTrackCapabilitiesBinding.h"
++#include "mozilla/dom/MediaTrackSettingsBinding.h"
++
++namespace mozilla {
++
++using dom::MediaDeviceKind;
++using dom::MediaTrackCapabilities;
++using dom::MediaTrackSettings;
++
++namespace {
++
++// One entry of "mediaDevices:cameras".
++struct Camera {
++  nsString mLabel;
++  nsString mFacingMode;
++  uint32_t mWidth = 1920;
++  uint32_t mHeight = 1080;
++  double mFrameRate = 30;
++  // Image Capture controls; absent when the camera has none.
++  bool mHasZoom = false;
++  double mZoomMin = 1, mZoomMax = 1, mZoomStep = 0.1;
++  bool mTorch = false;
++  std::vector<nsString> mFocusModes;
++  std::vector<nsString> mExposureModes;
++};
++
++// The raw id and group id of the default microphone and speaker. Both are
++// the phone's built-in audio, so they share a group, as in Chrome.
++constexpr auto kDefaultId = u"default"_ns;
++constexpr auto kDefaultLabel = u"Default"_ns;
++constexpr auto kBuiltInAudioGroup = u"android-builtin-audio"_ns;
++
++nsString ToString(const nlohmann::json& aValue) {
++  return aValue.is_string()
++             ? NS_ConvertUTF8toUTF16(aValue.get<std::string>().c_str())
++             : nsString();
++}
++
++double ToDouble(const nlohmann::json& aObject, const char* aKey,
++                double aDefault) {
++  auto it = aObject.find(aKey);
++  return it != aObject.end() && it->is_number() ? it->get<double>() : aDefault;
++}
++
++std::vector<nsString> ToStrings(const nlohmann::json& aObject,
++                                const char* aKey) {
++  std::vector<nsString> out;
++  auto it = aObject.find(aKey);
++  if (it != aObject.end() && it->is_array()) {
++    for (const auto& value : *it) {
++      if (value.is_string()) {
++        out.push_back(ToString(value));
++      }
++    }
++  }
++  return out;
++}
++
++// Parsed once: CAMOU_CONFIG never changes after startup. Malformed entries
++// are skipped rather than trusted.
++const std::vector<Camera>& Cameras() {
++  static const std::vector<Camera> cameras = [] {
++    std::vector<Camera> out;
++    const nlohmann::json& config = MaskConfig::GetJson();
++    if (!config.is_object()) {
++      return out;
++    }
++    auto list = config.find("mediaDevices:cameras");
++    if (list == config.end() || !list->is_array()) {
++      return out;
++    }
++    for (const auto& entry : *list) {
++      if (!entry.is_object()) {
++        continue;
++      }
++      Camera camera;
++      auto label = entry.find("label");
++      if (label == entry.end() || !label->is_string()) {
++        continue;
++      }
++      camera.mLabel = ToString(*label);
++      auto facing = entry.find("facingMode");
++      if (facing != entry.end()) {
++        camera.mFacingMode = ToString(*facing);
++      }
++      camera.mWidth = static_cast<uint32_t>(ToDouble(entry, "width", 1920));
++      camera.mHeight = static_cast<uint32_t>(ToDouble(entry, "height", 1080));
++      camera.mFrameRate = ToDouble(entry, "frameRate", 30);
++      auto zoom = entry.find("zoom");
++      if (zoom != entry.end() && zoom->is_object()) {
++        camera.mHasZoom = true;
++        camera.mZoomMin = ToDouble(*zoom, "min", 1);
++        camera.mZoomMax = ToDouble(*zoom, "max", 1);
++        camera.mZoomStep = ToDouble(*zoom, "step", 0.1);
++      }
++      auto torch = entry.find("torch");
++      camera.mTorch = torch != entry.end() && torch->is_boolean() &&
++                      torch->get<bool>();
++      camera.mFocusModes = ToStrings(entry, "focusMode");
++      camera.mExposureModes = ToStrings(entry, "exposureMode");
++      out.push_back(std::move(camera));
++    }
++    return out;
++  }();
++  return cameras;
++}
++
++// The configured camera with this label, or the first one: a device that is
++// not a configured camera is whatever getUserMedia opened by default, which
++// in Chrome on Android is the first camera enumerated.
++const Camera* FindCamera(const nsAString& aRawName) {
++  const auto& cameras = Cameras();
++  for (const auto& camera : cameras) {
++    if (camera.mLabel.Equals(aRawName)) {
++      return &camera;
++    }
++  }
++  return cameras.empty() ? nullptr : &cameras.front();
++}
++
++void AppendLiterals(dom::Optional<dom::Sequence<nsString>>& aOut,
++                    std::initializer_list<nsLiteralString> aValues) {
++  auto& seq = aOut.Construct();
++  for (const auto& value : aValues) {
++    (void)seq.AppendElement(value, fallible);
++  }
++}
++
++void AppendStrings(dom::Optional<dom::Sequence<nsString>>& aOut,
++                   const std::vector<nsString>& aValues) {
++  auto& seq = aOut.Construct();
++  for (const auto& value : aValues) {
++    (void)seq.AppendElement(value, fallible);
++  }
++}
++
++void AppendBothBooleans(dom::Optional<dom::Sequence<bool>>& aOut) {
++  auto& seq = aOut.Construct();
++  (void)seq.AppendElement(true, fallible);
++  (void)seq.AppendElement(false, fallible);
++}
++
++void SetRange(dom::Optional<dom::ULongRange>& aOut, uint32_t aMin,
++              uint32_t aMax) {
++  auto& range = aOut.Construct();
++  range.mMin.Construct(aMin);
++  range.mMax.Construct(aMax);
++}
++
++void SetRange(dom::Optional<dom::DoubleRange>& aOut, double aMin,
++              double aMax) {
++  auto& range = aOut.Construct();
++  range.mMin.Construct(aMin);
++  range.mMax.Construct(aMax);
++}
++
++}  // namespace
++
++/* static */
++bool AndroidMediaDevices::IsActive() {
++  return MaskConfig::IsAndroidDevice() && !Cameras().empty();
++}
++
++/* static */
++void AndroidMediaDevices::Enumerate(MediaEngine* aFakeEngine,
++                                    MediaManager::MediaDeviceSetRefCnt& aOut) {
++  aOut.AppendElement(new MediaDevice(
++      aFakeEngine, dom::MediaSourceEnum::Microphone, kDefaultLabel, kDefaultId,
++      kBuiltInAudioGroup, MediaDevice::IsScary::No,
++      MediaDevice::OsPromptable::No));
++
++  for (const auto& camera : Cameras()) {
++    // Each camera is its own device group; the label doubles as the raw id,
++    // which is only ever exposed hashed.
++    aOut.AppendElement(new MediaDevice(
++        aFakeEngine, dom::MediaSourceEnum::Camera, camera.mLabel,
++        camera.mLabel, camera.mLabel, MediaDevice::IsScary::No,
++        MediaDevice::OsPromptable::No));
++  }
++
++  RefPtr info = new AudioDeviceInfo(
++      nullptr, kDefaultLabel, kBuiltInAudioGroup, u""_ns,
++      CUBEB_DEVICE_TYPE_OUTPUT, CUBEB_DEVICE_STATE_ENABLED,
++      CUBEB_DEVICE_PREF_ALL, CUBEB_DEVICE_FMT_ALL, CUBEB_DEVICE_FMT_S16NE, 2,
++      48000, 48000, 48000, 256, 256);
++  aOut.AppendElement(new MediaDevice(aFakeEngine, info, kDefaultId));
++}
++
++/* static */
++void AndroidMediaDevices::GetCapabilities(MediaDeviceKind aKind,
++                                          const nsAString& aRawName,
++                                          bool aTrack,
++                                          MediaTrackCapabilities& aOut) {
++  if (aKind == MediaDeviceKind::Audioinput) {
++    AppendBothBooleans(aOut.mAutoGainControl);
++    SetRange(aOut.mChannelCount, 1, 2);
++    AppendBothBooleans(aOut.mEchoCancellation);
++    AppendBothBooleans(aOut.mNoiseSuppression);
++    SetRange(aOut.mSampleRate, 48000, 48000);
++    SetRange(aOut.mSampleSize, 16, 16);
++    return;
++  }
++  if (aKind != MediaDeviceKind::Videoinput) {
++    return;
++  }
++  const Camera* camera = FindCamera(aRawName);
++  if (!camera) {
++    return;
++  }
++
++  SetRange(aOut.mWidth, 1, camera->mWidth);
++  SetRange(aOut.mHeight, 1, camera->mHeight);
++  SetRange(aOut.mAspectRatio, 1.0 / camera->mHeight, camera->mWidth);
++  SetRange(aOut.mFrameRate, 1, camera->mFrameRate);
++  if (!camera->mFacingMode.IsEmpty()) {
++    AppendStrings(aOut.mFacingMode, std::vector<nsString>{camera->mFacingMode});
++  } else {
++    aOut.mFacingMode.Construct();
++  }
++  AppendLiterals(aOut.mResizeMode, {u"none"_ns, u"crop-and-scale"_ns});
++
++  if (!aTrack) {
++    return;
++  }
++  if (!camera->mExposureModes.empty()) {
++    AppendStrings(aOut.mExposureMode, camera->mExposureModes);
++  }
++  if (!camera->mFocusModes.empty()) {
++    AppendStrings(aOut.mFocusMode, camera->mFocusModes);
++  }
++  if (camera->mHasZoom) {
++    auto& zoom = aOut.mZoom.Construct();
++    zoom.mMin.Construct(camera->mZoomMin);
++    zoom.mMax.Construct(camera->mZoomMax);
++    zoom.mStep.Construct(camera->mZoomStep);
++  }
++  if (camera->mTorch) {
++    aOut.mTorch.Construct(true);
++  }
++}
++
++/* static */
++Maybe<nsString> AndroidMediaDevices::FacingModeOf(const nsAString& aRawName) {
++  if (!IsActive()) {
++    return Nothing();
++  }
++  for (const auto& camera : Cameras()) {
++    if (camera.mLabel.Equals(aRawName) && !camera.mFacingMode.IsEmpty()) {
++      return Some(camera.mFacingMode);
++    }
++  }
++  return Nothing();
++}
++
++/* static */
++void AndroidMediaDevices::AddSettings(const nsAString& aRawName,
++                                      MediaTrackSettings& aOut) {
++  const Camera* camera = FindCamera(aRawName);
++  if (camera && !camera->mFacingMode.IsEmpty()) {
++    aOut.mFacingMode.Construct(camera->mFacingMode);
++  }
++}
++
++/* static */
++void AndroidMediaDevices::ToChromeId(const nsAString& aRawId, nsAString& aId) {
++  if (aRawId.Equals(kDefaultId)) {
++    aId.Assign(kDefaultId);
++    return;
++  }
++  nsAutoCString bytes;
++  if (NS_FAILED(Base64Decode(NS_ConvertUTF16toUTF8(aId), bytes))) {
++    return;
++  }
++  static const char kHex[] = "0123456789abcdef";
++  nsAutoString hex;
++  for (char c : bytes) {
++    const auto byte = static_cast<uint8_t>(c);
++    hex.Append(char16_t(kHex[byte >> 4]));
++    hex.Append(char16_t(kHex[byte & 0xf]));
++  }
++  aId.Assign(hex);
++}
++
++}  // namespace mozilla
+diff --git a/dom/media/AndroidMediaDevices.h b/dom/media/AndroidMediaDevices.h
+new file mode 100644
+index 0000000000..ed519adbd8
+--- /dev/null
++++ b/dom/media/AndroidMediaDevices.h
+@@ -0,0 +1,66 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Camoufox: the capture devices of an Android phone, as Chrome on Android
++ * reports them.
++ *
++ * Active on the Android device profiles when "mediaDevices:cameras" is set.
++ * Chrome on Android enumerates the Camera2 devices in descending id order --
++ * "camera2 1, facing front" before "camera2 0, facing back" -- plus one
++ * default microphone and one default speaker, both with the literal deviceId
++ * "default". Every other id is 64 lowercase hex digits.
++ *
++ * Capabilities come in two tiers, as in Chrome: InputDeviceInfo.getCapabilities
++ * reports the capture formats (size, frame rate, facing mode), and a running
++ * track's getCapabilities() adds the Image Capture controls the camera has
++ * (zoom, torch, focus and exposure modes). */
++
++#ifndef DOM_MEDIA_ANDROIDMEDIADEVICES_H_
++#define DOM_MEDIA_ANDROIDMEDIADEVICES_H_
++
++#include "mozilla/Maybe.h"
++#include "mozilla/MediaManager.h"
++#include "nsString.h"
++
++namespace mozilla {
++
++namespace dom {
++struct MediaTrackCapabilities;
++struct MediaTrackSettings;
++}  // namespace dom
++
++class AndroidMediaDevices {
++ public:
++  // Whether the Android device set replaces the host's devices.
++  static bool IsActive();
++
++  // The phone's devices, in Chrome's order: microphone, cameras, speaker.
++  static void Enumerate(MediaEngine* aFakeEngine,
++                        MediaManager::MediaDeviceSetRefCnt& aOut);
++
++  // Capabilities of an input device. aRawName identifies the camera; a
++  // device that is not one of the configured cameras (a real or fake capture
++  // device opened by getUserMedia) is described as the first camera, which
++  // is what Chrome opens when no facingMode is asked for. aTrack adds the
++  // Image Capture capabilities a running track reports.
++  static void GetCapabilities(dom::MediaDeviceKind aKind,
++                              const nsAString& aRawName, bool aTrack,
++                              dom::MediaTrackCapabilities& aOut);
++
++  // The facing mode of the configured camera named aRawName, if it is one.
++  // Safe on any thread.
++  static Maybe<nsString> FacingModeOf(const nsAString& aRawName);
++
++  // Adds the camera's facingMode to a video track's settings.
++  static void AddSettings(const nsAString& aRawName,
++                          dom::MediaTrackSettings& aOut);
++
++  // Rewrites an anonymized (base64) device or group id in Chrome's format:
++  // 64 lowercase hex digits. The raw id "default" stays "default".
++  static void ToChromeId(const nsAString& aRawId, nsAString& aId);
++};
++
++}  // namespace mozilla
++
++#endif  // DOM_MEDIA_ANDROIDMEDIADEVICES_H_
+diff --git a/dom/media/MediaDeviceInfo.cpp b/dom/media/MediaDeviceInfo.cpp
+index 95a748fe94..11fb61c747 100644
+--- a/dom/media/MediaDeviceInfo.cpp
++++ b/dom/media/MediaDeviceInfo.cpp
+@@ -4,7 +4,9 @@
+ 
+ #include "mozilla/dom/MediaDeviceInfo.h"
+ 
++#include "AndroidMediaDevices.h"
+ #include "mozilla/MediaManager.h"
++#include "mozilla/dom/InputDeviceInfoBinding.h"
+ #include "mozilla/dom/MediaStreamBinding.h"
+ #include "nsIScriptGlobalObject.h"
+ 
+@@ -38,6 +40,35 @@ void MediaDeviceInfo::GetGroupId(nsString& retval) { retval = mGroupId; }
+ 
+ void MediaDeviceInfo::GetLabel(nsString& retval) { retval = mLabel; }
+ 
++InputDeviceInfo::InputDeviceInfo(const nsAString& aDeviceId,
++                                 MediaDeviceKind aKind, const nsAString& aLabel,
++                                 const nsAString& aGroupId,
++                                 const nsAString& aRawName,
++                                 bool aExposeCapabilities)
++    : MediaDeviceInfo(aDeviceId, aKind, aLabel, aGroupId),
++      mRawName(aRawName),
++      mExposeCapabilities(aExposeCapabilities) {}
++
++JSObject* InputDeviceInfo::WrapObject(JSContext* aCx,
++                                      JS::Handle<JSObject*> aGivenProto) {
++  return InputDeviceInfo_Binding::Wrap(aCx, this, aGivenProto);
++}
++
++void InputDeviceInfo::GetCapabilities(MediaTrackCapabilities& aRetVal) {
++  // Before the page may see the device, Chrome returns an empty dictionary.
++  if (!mExposeCapabilities) {
++    return;
++  }
++  AndroidMediaDevices::GetCapabilities(Kind(), mRawName, /* aTrack */ false,
++                                       aRetVal);
++  nsString id;
++  GetDeviceId(id);
++  aRetVal.mDeviceId.Construct(id);
++  nsString groupId;
++  GetGroupId(groupId);
++  aRetVal.mGroupId.Construct(groupId);
++}
++
+ MediaDeviceKind Kind();
+ 
+ }  // namespace mozilla::dom
+diff --git a/dom/media/MediaDeviceInfo.h b/dom/media/MediaDeviceInfo.h
+index 0bd1d740c0..ae7d7ea68e 100644
+--- a/dom/media/MediaDeviceInfo.h
++++ b/dom/media/MediaDeviceInfo.h
+@@ -7,6 +7,7 @@
+ 
+ #include "js/RootingAPI.h"
+ #include "mozilla/dom/MediaDeviceInfoBinding.h"
++#include "mozilla/dom/MediaTrackCapabilitiesBinding.h"
+ #include "nsCycleCollectionParticipant.h"
+ #include "nsID.h"
+ #include "nsISupports.h"
+@@ -18,7 +19,8 @@ namespace mozilla::dom {
+ #define MOZILLA_DOM_MEDIADEVICEINFO_IMPLEMENTATION_IID \
+   {0x25091870, 0x84d6, 0x4acf, {0xaf, 0x97, 0x6e, 0xd5, 0x5b, 0xe0, 0x47, 0xb2}}
+ 
+-class MediaDeviceInfo final : public nsISupports, public nsWrapperCache {
++// Not final: InputDeviceInfo (Android device profiles) derives from it.
++class MediaDeviceInfo : public nsISupports, public nsWrapperCache {
+  public:
+   explicit MediaDeviceInfo(const nsAString& aDeviceId, MediaDeviceKind aKind,
+                            const nsAString& aLabel, const nsAString& aGroupId);
+@@ -37,13 +39,36 @@ class MediaDeviceInfo final : public nsISupports, public nsWrapperCache {
+   void GetLabel(nsString& retval);
+   void GetGroupId(nsString& retval);
+ 
++ protected:
++  virtual ~MediaDeviceInfo() = default;
++
+  private:
+   MediaDeviceKind mKind;
+   nsString mDeviceId;
+   nsString mLabel;
+   nsString mGroupId;
++};
+ 
+-  virtual ~MediaDeviceInfo() = default;
++// Camoufox: https://w3c.github.io/mediacapture-main/#input-specific-device-info
++// What Chrome returns for input devices; created only on the Android device
++// profiles. Its capabilities are fixed when enumerateDevices() resolves, and
++// are empty when the device's details are not exposed.
++class InputDeviceInfo final : public MediaDeviceInfo {
++ public:
++  InputDeviceInfo(const nsAString& aDeviceId, MediaDeviceKind aKind,
++                  const nsAString& aLabel, const nsAString& aGroupId,
++                  const nsAString& aRawName, bool aExposeCapabilities);
++
++  JSObject* WrapObject(JSContext* cx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++  void GetCapabilities(MediaTrackCapabilities& aRetVal);
++
++ private:
++  ~InputDeviceInfo() override = default;
++
++  const nsString mRawName;
++  const bool mExposeCapabilities;
+ };
+ 
+ }  // namespace mozilla::dom
+diff --git a/dom/media/MediaDevices.cpp b/dom/media/MediaDevices.cpp
+index 31490e30a5..aba06b0a39 100644
+--- a/dom/media/MediaDevices.cpp
++++ b/dom/media/MediaDevices.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "mozilla/dom/MediaDevices.h"
+ 
++#include "AndroidMediaDevices.h"
+ #include "AudioDeviceInfo.h"
+ #include "MediaEngine.h"
+ #include "MediaEngineFake.h"
+@@ -343,6 +344,39 @@ RefPtr<MediaDeviceSetRefCnt> MediaDevices::FilterExposedDevices(
+     exposed->AppendElement(device);
+   }
+ 
++  // Camoufox: on the Android device profiles, a phone's devices in place of
++  // the host's. Until the page may see a kind's details, one anonymous device
++  // of that kind stands for all of them, as for Firefox's own devices.
++  if (AndroidMediaDevices::IsActive()) {
++    RefPtr phone = new MediaDeviceSetRefCnt();
++    AndroidMediaDevices::Enumerate(new MediaEngineFake(), *phone);
++    bool dropPhoneMics =
++        !FeaturePolicyUtils::IsFeatureAllowed(doc, u"microphone"_ns);
++    bool dropPhoneCams =
++        !FeaturePolicyUtils::IsFeatureAllowed(doc, u"camera"_ns);
++    exposed->Clear();
++    for (const auto& device : *phone) {
++      switch (device->mKind) {
++        case MediaDeviceKind::Audioinput:
++          if (dropPhoneMics) {
++            continue;
++          }
++          dropPhoneMics = !mCanExposeMicrophoneInfo;
++          break;
++        case MediaDeviceKind::Videoinput:
++          if (dropPhoneCams) {
++            continue;
++          }
++          dropPhoneCams = !mCanExposeCameraInfo;
++          break;
++        case MediaDeviceKind::Audiooutput:
++          break;
++      }
++      exposed->AppendElement(device);
++    }
++    return exposed;
++  }
++
+   // Replaces the RFP-based device count spoofing with one that controls the
+   // number of devices exposed.
+ 
+@@ -501,7 +535,28 @@ void MediaDevices::ResolveEnumerateDevicesPromise(
+       legacy &&
+       MediaManager::Get()->IsActivelyCapturingOrHasAPermission(windowId);
+ 
++  const bool android = AndroidMediaDevices::IsActive();
+   for (const RefPtr<LocalMediaDevice>& device : aDevices) {
++    if (android) {
++      // Chrome: input devices are InputDeviceInfo, and the speaker's details
++      // follow the microphone permission.
++      const MediaDeviceKind kind = device->Kind();
++      const bool exposeInfo = kind == MediaDeviceKind::Audiooutput
++                                  ? mCanExposeMicrophoneInfo
++                                  : CanExposeInfo(kind);
++      const nsString& id = exposeInfo ? device->mID : EmptyString();
++      const nsString& label = exposeInfo ? device->mName : EmptyString();
++      const nsString& groupId = exposeInfo ? device->mGroupID : EmptyString();
++      if (kind == MediaDeviceKind::Audiooutput) {
++        infos.AppendElement(
++            MakeRefPtr<MediaDeviceInfo>(id, kind, label, groupId));
++      } else {
++        infos.AppendElement(MakeRefPtr<InputDeviceInfo>(
++            id, kind, label, groupId, device->mRawDevice->mRawName,
++            exposeInfo));
++      }
++      continue;
++    }
+     bool exposeInfo = CanExposeInfo(device->Kind()) || legacy;
+     bool exposeLabel = legacy ? capturePermitted : exposeInfo;
+     infos.AppendElement(MakeRefPtr<MediaDeviceInfo>(
+diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
+index cc38a8f750..a1aff4b2ae 100644
+--- a/dom/media/MediaManager.cpp
++++ b/dom/media/MediaManager.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "MediaManager.h"
+ 
++#include "AndroidMediaDevices.h"
+ #include "AudioCaptureTrack.h"
+ #include "AudioDeviceInfo.h"
+ #include "AudioStreamTrack.h"
+@@ -1170,11 +1171,28 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
+ void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
+   MOZ_ASSERT(NS_IsMainThread());
+   Source()->GetSettings(aOutSettings);
++  if (AndroidMediaDevices::IsActive() &&
++      Kind() == MediaDeviceKind::Videoinput) {
++    AndroidMediaDevices::AddSettings(mRawDevice->mRawName, aOutSettings);
++  }
+ }
+ 
+ void LocalMediaDevice::GetCapabilities(
+     MediaTrackCapabilities& aOutCapabilities) {
+   MOZ_ASSERT(NS_IsMainThread());
++  if (AndroidMediaDevices::IsActive() &&
++      (Kind() == MediaDeviceKind::Videoinput ||
++       Kind() == MediaDeviceKind::Audioinput) &&
++      GetMediaSource() != MediaSourceEnum::Screen &&
++      GetMediaSource() != MediaSourceEnum::Window &&
++      GetMediaSource() != MediaSourceEnum::Browser) {
++    // A capture device reports the phone's camera or microphone.
++    AndroidMediaDevices::GetCapabilities(Kind(), mRawDevice->mRawName,
++                                         /* aTrack */ true, aOutCapabilities);
++    aOutCapabilities.mDeviceId.Construct(mID);
++    aOutCapabilities.mGroupId.Construct(mGroupID);
++    return;
++  }
+   Source()->GetCapabilities(aOutCapabilities);
+ }
+ 
+@@ -2416,6 +2434,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+     GuessVideoDeviceGroupIDs(*devices, audios);
+   }
+ 
++  // Camoufox: on the Android device profiles the phone's microphone, cameras
++  // and speaker stand in for the host's, for getUserMedia() as much as for
++  // enumerateDevices(), so an id from one works in the other. They are fake
++  // devices: a capture streams synthetic frames and tone, never the host's
++  // camera or microphone. Screen, window and browser sources are untouched.
++  if (AndroidMediaDevices::IsActive()) {
++    const bool mics = aParams.mAudio.isSome() &&
++                      aParams.mAudio->mInputType == MediaSourceEnum::Microphone;
++    const bool cams = aParams.VideoInputType() == MediaSourceEnum::Camera;
++    const bool outputs =
++        aParams.mFlags.contains(EnumerationFlag::EnumerateAudioOutputs);
++    devices->RemoveElementsBy([&](const RefPtr<MediaDevice>& aDevice) {
++      return (mics && aDevice->mKind == MediaDeviceKind::Audioinput) ||
++             (cams && aDevice->mKind == MediaDeviceKind::Videoinput) ||
++             (outputs && aDevice->mKind == MediaDeviceKind::Audiooutput);
++    });
++    RefPtr phone = new MediaDeviceSetRefCnt();
++    AndroidMediaDevices::Enumerate(new MediaEngineFake(), *phone);
++    size_t insertAt = 0;
++    for (const auto& device : *phone) {
++      if ((mics && device->mKind == MediaDeviceKind::Audioinput) ||
++          (cams && device->mKind == MediaDeviceKind::Videoinput)) {
++        // Inputs first, microphones before cameras, as enumerated above.
++        devices->InsertElementAt(insertAt++, device);
++      } else if (outputs && device->mKind == MediaDeviceKind::Audiooutput) {
++        devices->AppendElement(device);
++      }
++    }
++  }
++
+   return devices;
+ }
+ 
+@@ -3426,6 +3474,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
+               // after a browser restart the fingerprint is not bigger.
+               groupId.AppendInt(windowId);
+               nsContentUtils::AnonymizeId(groupId, aOriginKey);
++              if (AndroidMediaDevices::IsActive()) {
++                // Chrome's id format: 64 hex digits, or "default".
++                if (!id.IsEmpty()) {
++                  AndroidMediaDevices::ToChromeId(device->mRawID, id);
++                }
++                AndroidMediaDevices::ToChromeId(device->mRawGroupID, groupId);
++              }
+               anonymized->EmplaceBack(
+                   new LocalMediaDevice(device, id, groupId, name));
+             }
+diff --git a/dom/media/moz.build b/dom/media/moz.build
+index eb53af3a83..2909f24d46 100644
+--- a/dom/media/moz.build
++++ b/dom/media/moz.build
+@@ -261,6 +261,7 @@ EXPORTS.mozilla.dom += [
+ UNIFIED_SOURCES += [
+     "ADTSDecoder.cpp",
+     "ADTSDemuxer.cpp",
++    "AndroidMediaDevices.cpp",
+     "AudioCaptureTrack.cpp",
+     "AudioChannelFormat.cpp",
+     "AudioCompactor.cpp",
+diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
+index 8123aa05e5..6b96366275 100644
+--- a/dom/media/webrtc/MediaEngineFake.cpp
++++ b/dom/media/webrtc/MediaEngineFake.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "MediaEngineFake.h"
+ 
++#include "AndroidMediaDevices.h"
++
+ #include "AudioSegment.h"
+ #include "FakeVideoSource.h"
+ #include "ImageContainer.h"
+@@ -84,7 +86,10 @@ static nsString FakeVideoName() {
+  */
+ class MediaEngineFakeVideoSource : public MediaEngineSource {
+  public:
+-  MediaEngineFakeVideoSource();
++  // aFacingMode: the camera's facing mode, when the fake device stands for a
++  // real camera (Camoufox: the Android device profiles' cameras).
++  explicit MediaEngineFakeVideoSource(
++      const Maybe<nsString>& aFacingMode = Nothing());
+ 
+   static already_AddRefed<MediaEngineFakeVideoSource> CreateFrom(
+       const MediaEngineFakeVideoSource* aSource);
+@@ -133,15 +138,22 @@ class MediaEngineFakeVideoSource : public MediaEngineSource {
+ 
+   // Main thread only.
+   const RefPtr<media::Refcountable<dom::MediaTrackSettings>> mSettings;
++
++  // Immutable.
++  const Maybe<nsString> mFacingMode;
+ };
+ 
+-MediaEngineFakeVideoSource::MediaEngineFakeVideoSource()
+-    : mSettings(MakeAndAddRef<media::Refcountable<MediaTrackSettings>>()) {
++MediaEngineFakeVideoSource::MediaEngineFakeVideoSource(
++    const Maybe<nsString>& aFacingMode)
++    : mSettings(MakeAndAddRef<media::Refcountable<MediaTrackSettings>>()),
++      mFacingMode(aFacingMode) {
+   mSettings->mWidth.Construct(int32_t(VIDEO_WIDTH_DEFAULT));
+   mSettings->mHeight.Construct(int32_t(VIDEO_HEIGHT_DEFAULT));
+   mSettings->mFrameRate.Construct(double(MediaEnginePrefs::DEFAULT_VIDEO_FPS));
+-  mSettings->mFacingMode.Construct(NS_ConvertASCIItoUTF16(
+-      dom::GetEnumString(VideoFacingModeEnum::Environment)));
++  mSettings->mFacingMode.Construct(
++      mFacingMode ? *mFacingMode
++                  : NS_ConvertASCIItoUTF16(
++                        dom::GetEnumString(VideoFacingModeEnum::Environment)));
+   mSettings->mResizeMode.Construct(NS_ConvertASCIItoUTF16(
+       dom::GetEnumString(dom::VideoResizeModeEnum::None)));
+ }
+@@ -149,7 +161,7 @@ MediaEngineFakeVideoSource::MediaEngineFakeVideoSource()
+ /*static*/ already_AddRefed<MediaEngineFakeVideoSource>
+ MediaEngineFakeVideoSource::CreateFrom(
+     const MediaEngineFakeVideoSource* aSource) {
+-  auto src = MakeRefPtr<MediaEngineFakeVideoSource>();
++  auto src = MakeRefPtr<MediaEngineFakeVideoSource>(aSource->mFacingMode);
+   *static_cast<MediaTrackSettings*>(src->mSettings) = *aSource->mSettings;
+   return src.forget();
+ }
+@@ -171,7 +183,7 @@ uint32_t MediaEngineFakeVideoSource::GetBestFitnessDistance(
+     const auto* cs = aConstraintSets.ElementAt(0);
+     const auto resizeMode = MediaConstraintsHelper::GetResizeMode(*cs, aPrefs);
+     using H = MediaConstraintsHelper;
+-    Maybe<nsString> facingMode = Nothing();
++    Maybe<nsString> facingMode = mFacingMode;
+     distance += H::FitnessDistance(facingMode, cs->mFacingMode);
+ 
+     if (resizeMode.valueOr(dom::VideoResizeModeEnum::None) ==
+@@ -202,8 +214,10 @@ void MediaEngineFakeVideoSource::GetCapabilities(
+     MediaTrackCapabilities& aOutCapabilities) const {
+   MOZ_ASSERT(NS_IsMainThread());
+ 
+-  NS_ConvertASCIItoUTF16 facingString(
+-      GetEnumString(VideoFacingModeEnum::Environment));
++  nsString facingString =
++      mFacingMode ? *mFacingMode
++                  : NS_ConvertASCIItoUTF16(
++                        GetEnumString(VideoFacingModeEnum::Environment));
+   nsTArray<nsString> facing;
+   facing.AppendElement(facingString);
+   aOutCapabilities.mFacingMode.Construct(std::move(facing));
+@@ -618,7 +632,8 @@ RefPtr<MediaEngineSource> MediaEngineFake::CreateSource(
+   MOZ_ASSERT(aMediaDevice->mEngine == this);
+   switch (aMediaDevice->mMediaSource) {
+     case MediaSourceEnum::Camera:
+-      return new MediaEngineFakeVideoSource();
++      return new MediaEngineFakeVideoSource(
++          AndroidMediaDevices::FacingModeOf(aMediaDevice->mRawName));
+     case MediaSourceEnum::Microphone:
+       return new MediaEngineFakeAudioSource();
+     default:
+diff --git a/dom/webidl/InputDeviceInfo.webidl b/dom/webidl/InputDeviceInfo.webidl
+new file mode 100644
+index 0000000000..47da96491e
+--- /dev/null
++++ b/dom/webidl/InputDeviceInfo.webidl
+@@ -0,0 +1,15 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/.
++ *
++ * The origin of this IDL file is
++ * https://w3c.github.io/mediacapture-main/#input-specific-device-info
++ */
++
++// Camoufox: Chrome returns an InputDeviceInfo for every input device from
++// enumerateDevices(); Firefox never implemented it. Exposed on the Android
++// device profiles only.
++[Func="mozilla::dom::AndroidDevice::Exposed", Exposed=Window]
++interface InputDeviceInfo : MediaDeviceInfo {
++  MediaTrackCapabilities getCapabilities();
++};
+diff --git a/dom/webidl/MediaTrackCapabilities.webidl b/dom/webidl/MediaTrackCapabilities.webidl
+index f589a9d6b8..70d333471c 100644
+--- a/dom/webidl/MediaTrackCapabilities.webidl
++++ b/dom/webidl/MediaTrackCapabilities.webidl
+@@ -6,6 +6,7 @@
+  * https://w3c.github.io/mediacapture-main/getusermedia.html#dom-doublerange
+  * https://w3c.github.io/mediacapture-main/getusermedia.html#dom-ulongrange
+  * https://w3c.github.io/mediacapture-main/getusermedia.html#media-track-capabilities
++ * https://w3c.github.io/mediacapture-image/#mediatrackcapabilities-section
+  */
+ 
+ dictionary DoubleRange {
+@@ -18,15 +19,27 @@ dictionary ULongRange {
+   [Clamp] unsigned long min;
+ };
+ 
++// https://w3c.github.io/mediacapture-image/#mediasettingsrange-section
++dictionary MediaSettingsRange {
++  double max;
++  double min;
++  double step;
++};
++
++// Camoufox: aspectRatio, sampleRate, sampleSize and the Image Capture members
++// below are only ever filled in on the Android device profiles, which report
++// a phone's capture devices the way Chrome does (see AndroidMediaDevices.h).
++// Unset members do not appear in the returned object, so Firefox's own
++// capabilities keep their shape.
+ dictionary MediaTrackCapabilities {
+   ULongRange width;
+   ULongRange height;
+-  // DoubleRange aspectRatio;
++  DoubleRange aspectRatio;
+   DoubleRange frameRate;
+   sequence<DOMString> facingMode;
+   sequence<DOMString> resizeMode;
+-  // ULongRange sampleRate;
+-  // ULongRange sampleSize;
++  ULongRange sampleRate;
++  ULongRange sampleSize;
+   sequence<boolean> echoCancellation;
+   sequence<boolean> autoGainControl;
+   sequence<boolean> noiseSuppression;
+@@ -35,4 +48,11 @@ dictionary MediaTrackCapabilities {
+   DOMString deviceId;
+   DOMString groupId;
+   // sequence<boolean> backgroundBlur;
++
++  // https://w3c.github.io/mediacapture-image/#mediatrackcapabilities-section
++  sequence<DOMString> exposureMode;
++  sequence<DOMString> focusMode;
++  MediaSettingsRange zoom;
++  // Chrome's type; the specification has since moved to sequence<boolean>.
++  boolean torch;
+ };
+diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
+index 6921360139..cfebbb9791 100644
+--- a/dom/webidl/moz.build
++++ b/dom/webidl/moz.build
+@@ -767,6 +767,7 @@ WEBIDL_FILES = [
+     "ImageData.webidl",
+     "ImageDecoder.webidl",
+     "ImageDocument.webidl",
++    "InputDeviceInfo.webidl",
+     "InputEvent.webidl",
+     "IntersectionObserver.webidl",
+     "IntlUtils.webidl",

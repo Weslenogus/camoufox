@@ -128,6 +128,29 @@ static nlohmann::json Pixel10() {
       {"35724", "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"},
   };
 
+  // Capture devices, as Chrome enumerates them on a Pixel: the Camera2
+  // devices in descending id order (front first), each with its capture
+  // formats and Image Capture controls. Sizes are the sensors' largest
+  // YUV outputs.
+  p["mediaDevices:cameras"] = nlohmann::json::array({
+      {{"label", "camera2 1, facing front"},
+       {"facingMode", "user"},
+       {"width", 3648},
+       {"height", 2736},
+       {"frameRate", 30},
+       {"focusMode", {"continuous", "single-shot", "manual"}},
+       {"exposureMode", {"continuous", "manual"}}},
+      {{"label", "camera2 0, facing back"},
+       {"facingMode", "environment"},
+       {"width", 4080},
+       {"height", 3072},
+       {"frameRate", 30},
+       {"zoom", {{"min", 1}, {"max", 8}, {"step", 0.1}}},
+       {"torch", true},
+       {"focusMode", {"continuous", "single-shot", "manual"}},
+       {"exposureMode", {"continuous", "manual"}}},
+  });
+
   // Platform defaults that Gecko keys on prefs. Chrome on Android has no
   // Document Picture-in-Picture (the rest of the desktop-only APIs --
   // EyeDropper, WebHID, Window Management, Local Font Access, Window Controls
