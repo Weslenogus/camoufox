@@ -532,6 +532,8 @@ request type (document, image, same-origin and cross-site fetch).
 `Accept-Encoding` keeps Gecko's per-scheme values, which are Chrome's too
 (br and zstd only over HTTPS).
 
+- `patches/android/android-21-fetch-metadata.patch` (patch; lines in the patched source tree):
+  - `netwerk/protocol/http/nsHttpHandler.cpp`: L1983-1986, L1990, L2008
 - `additions/camoucfg/DeviceProfiles.cpp`: L313-320
 - `additions/camoucfg/UAClientHints.hpp`: L108-115
 - `tests/patches/android-fetch-metadata.py`: new file, L1-100
