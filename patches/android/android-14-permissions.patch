@@ -1,0 +1,43 @@
+diff --git a/dom/permission/PermissionUtils.cpp b/dom/permission/PermissionUtils.cpp
+index 7b087cb021..ca31d16e13 100644
+--- a/dom/permission/PermissionUtils.cpp
++++ b/dom/permission/PermissionUtils.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "PermissionUtils.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include "mozilla/dom/Document.h"
+ #include "nsIPermissionManager.h"
+ 
+@@ -64,6 +66,18 @@ PermissionState ActionToPermissionState(uint32_t aAction, PermissionName aName,
+                                         nsIGlobalObject* aGlobal) {
+   MOZ_ASSERT(aGlobal);
+ 
++  // Camoufox: an emulated Android device answers the way Chrome on a fresh
++  // phone does -- anything the user has not explicitly granted is "prompt".
++  // Firefox's own answers leak its configuration instead: a pref-level block
++  // (permissions.default.*) reads "denied", and a persisted "Always Ask"
++  // camera or microphone reads "granted". A real grant, such as Playwright's
++  // context.grantPermissions(), is still reported as granted.
++  if (MaskConfig::IsAndroidDevice()) {
++    return aAction == nsIPermissionManager::ALLOW_ACTION
++               ? PermissionState::Granted
++               : PermissionState::Prompt;
++  }
++
+   switch (aAction) {
+     case nsIPermissionManager::ALLOW_ACTION:
+       return PermissionState::Granted;
+diff --git a/dom/permission/moz.build b/dom/permission/moz.build
+index bbbcecda40..4f8f12bc7f 100644
+--- a/dom/permission/moz.build
++++ b/dom/permission/moz.build
+@@ -35,3 +35,6 @@ MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
+ FINAL_LIBRARY = "xul"
+ 
+ include("/ipc/chromium/chromium-config.mozbuild")
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]

@@ -375,3 +375,18 @@ guard pins that no LAN address or hostname appears in any candidate.
   - `dom/webidl/Navigator.webidl`: L61-62, L182-185, L195-196
 - `additions/camoucfg/DeviceProfiles.cpp`: L42-56
 - `tests/patches/android-network-headers.py`: new file, L1-134
+
+## Task 14 - Permission states
+
+`navigator.permissions.query()` answers as Chrome on a fresh phone does:
+anything the user has not granted is "prompt". Firefox's answers leaked its
+configuration -- a pref-level block (`permissions.default.*`) read "denied",
+and a persisted "Always Ask" camera or microphone read "granted"; a real grant
+(e.g. Playwright's `grantPermissions`) still reads "granted".
+`Permissions.prototype.query` is left untouched, so it stays a native
+function.
+
+- `patches/android/android-14-permissions.patch` (patch; lines in the patched source tree):
+  - `dom/permission/PermissionUtils.cpp`: L7-8, L69-80
+  - `dom/permission/moz.build`: L38-40
+- `tests/patches/android-permissions.py`: new file, L1-79
