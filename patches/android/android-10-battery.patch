@@ -40,6 +40,18 @@ index 48fc3f4a81..8fa3ad316b 100644
  };
  
  }  // namespace mozilla::dom
+diff --git a/dom/battery/BatteryManager.h b/dom/battery/BatteryManager.h
+index 6a5399c4eb..2167b82901 100644
+--- a/dom/battery/BatteryManager.h
++++ b/dom/battery/BatteryManager.h
+@@ -7,6 +7,7 @@
+ 
+ #include "mozilla/DOMEventTargetHelper.h"
+ #include "mozilla/HalBatteryInformation.h"
++#include "mozilla/dom/AndroidDevice.h"
+ 
+ namespace mozilla {
+ 
 diff --git a/dom/webidl/BatteryManager.webidl b/dom/webidl/BatteryManager.webidl
 index 1cc806360a..784b03ad11 100644
 --- a/dom/webidl/BatteryManager.webidl
@@ -57,7 +69,7 @@ index 1cc806360a..784b03ad11 100644
      readonly attribute boolean             charging;
      readonly attribute unrestricted double chargingTime;
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index a15c51d7ba..d96cdfc9d0 100644
+index a726d1d704..e75171250a 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -134,7 +134,10 @@ Navigator includes NavigatorGeolocation;

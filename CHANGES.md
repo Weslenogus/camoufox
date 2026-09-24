@@ -306,6 +306,7 @@ dischargingTime 14400, through the existing `battery:*` keys.
 - `patches/android/android-10-battery.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L6-7, L31-40
   - `dom/base/AndroidDevice.h`: L30-32
+  - `dom/battery/BatteryManager.h`: L10
   - `dom/webidl/BatteryManager.webidl`: L12-15
   - `dom/webidl/Navigator.webidl`: L137-140
 - `additions/camoucfg/DeviceProfiles.cpp`: L154-159
