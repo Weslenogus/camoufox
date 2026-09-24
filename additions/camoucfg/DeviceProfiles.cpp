@@ -294,7 +294,7 @@ static nlohmann::json Pixel10() {
   {
     auto voice = [](const char* aName, const char* aLang, bool aDefault) {
       return nlohmann::json{{"name", aName},
-                            {"voiceURI", aName},
+                            {"voiceUri", aName},
                             {"lang", aLang},
                             {"isLocalService", false},
                             {"isDefault", aDefault}};
