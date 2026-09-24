@@ -68,10 +68,10 @@ index 05c1f8eb6a..333981e5bf 100644
           parseContext.isExtensionEnabled(TExtension::OVR_multiview)) &&
 diff --git a/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
 new file mode 100644
-index 0000000000..6a664051fe
+index 0000000000..bedbb81b62
 --- /dev/null
 +++ b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
-@@ -0,0 +1,476 @@
+@@ -0,0 +1,480 @@
 +//
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
@@ -370,7 +370,7 @@ index 0000000000..6a664051fe
 +
 +        if (visit == PreVisit)
 +        {
-+            mQueuedAtEntry.push_back(mReplacements.size());
++            mQueuedAtEntry.push_back(mQueued);
 +            return true;
 +        }
 +
@@ -378,7 +378,7 @@ index 0000000000..6a664051fe
 +        // node this one drops; leave such (rare) nested cases unexpanded.
 +        const size_t queuedAtEntry = mQueuedAtEntry.back();
 +        mQueuedAtEntry.pop_back();
-+        if (mReplacements.size() != queuedAtEntry)
++        if (mQueued != queuedAtEntry)
 +        {
 +            return true;
 +        }
@@ -388,10 +388,14 @@ index 0000000000..6a664051fe
 +            new TIntermBinary(arithmeticOp, left->deepCopy(), node->getRight());
 +        queueReplacement(new TIntermBinary(EOpAssign, left, arithmetic),
 +                         OriginalNode::IS_DROPPED);
++        ++mQueued;
 +        return true;
 +    }
 +
 +  private:
++    // Replacements this traverser has queued, and that count on entry to each
++    // compound assignment being visited.
++    size_t mQueued = 0;
 +    std::vector<size_t> mQueuedAtEntry;
 +};
 +

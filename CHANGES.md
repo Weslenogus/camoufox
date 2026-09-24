@@ -491,7 +491,7 @@ everything without the option.
   - `dom/canvas/WebGLShaderValidator.cpp`: L7-8, L75-79
   - `gfx/angle/checkout/include/GLSLANG/ShaderLang.h`: L421-424
   - `gfx/angle/checkout/src/compiler/translator/Compiler.cpp`: L28, L865-873
-  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-476
+  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-480
   - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h`: L1-28
   - `gfx/angle/targets/translator/moz.build`: L230
 - `additions/camoucfg/DeviceProfiles.cpp`: L94-95
