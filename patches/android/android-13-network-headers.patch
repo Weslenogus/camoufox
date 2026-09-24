@@ -1,0 +1,80 @@
+diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
+index 99aac18e54..43944fea2b 100644
+--- a/dom/base/AndroidDevice.cpp
++++ b/dom/base/AndroidDevice.cpp
+@@ -28,14 +28,20 @@ bool AndroidDevice::HasDeviceMemory(JSContext*, JSObject*) {
+ /* static */
+ bool AndroidDevice::Exposed(JSContext*, JSObject*) { return IsEmulated(); }
+ 
++static bool IsSystemGlobal(JSObject* aGlobal) {
++  nsIPrincipal* principal = nsContentUtils::ObjectPrincipal(aGlobal);
++  return principal && principal->IsSystemPrincipal();
++}
++
+ /* static */
+ bool AndroidDevice::HasBatteryAPI(JSContext*, JSObject* aGlobal) {
+   // What ChromeOnly checked: a system-principal global.
+-  if (nsIPrincipal* principal = nsContentUtils::ObjectPrincipal(aGlobal);
+-      principal && principal->IsSystemPrincipal()) {
+-    return true;
+-  }
+-  return IsEmulated();
++  return IsSystemGlobal(aGlobal) || IsEmulated();
++}
++
++/* static */
++bool AndroidDevice::IsNotEmulated(JSContext*, JSObject* aGlobal) {
++  return !IsEmulated() || IsSystemGlobal(aGlobal);
+ }
+ 
+ }  // namespace mozilla::dom
+diff --git a/dom/base/AndroidDevice.h b/dom/base/AndroidDevice.h
+index 8fa3ad316b..4bae9a5622 100644
+--- a/dom/base/AndroidDevice.h
++++ b/dom/base/AndroidDevice.h
+@@ -27,6 +27,9 @@ class AndroidDevice {
+   // For an API only Chrome on Android has (Web NFC, the Contact Picker,
+   // window.orientation). Secure-context requirements stay in the IDL.
+   static bool Exposed(JSContext*, JSObject*);
++  // For a member only Firefox has, which Chrome lacks. Always true for
++  // system-principal globals, which may rely on it.
++  static bool IsNotEmulated(JSContext*, JSObject* aGlobal);
+   // Firefox keeps the Battery Status API for its own UI; Chrome on Android
+   // exposes it to secure pages.
+   static bool HasBatteryAPI(JSContext*, JSObject* aGlobal);
+diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
+index d96cdfc9d0..bd6ed828bc 100644
+--- a/dom/webidl/Navigator.webidl
++++ b/dom/webidl/Navigator.webidl
+@@ -58,7 +58,8 @@ interface mixin NavigatorID {
+   readonly attribute DOMString product; // constant "Gecko"
+ 
+   // Everyone but WebKit/Blink supports this.  See bug 679971.
+-  [Exposed=Window]
++  // Camoufox: absent on the Android device profiles, as in Chrome.
++  [Exposed=Window, Func="mozilla::dom::AndroidDevice::IsNotEmulated"]
+   boolean taintEnabled(); // constant false
+ };
+ 
+@@ -178,7 +179,10 @@ partial interface Navigator {
+ };
+ 
+ partial interface Navigator {
+-  [Throws, Constant, Cached, NeedsCallerType]
++  // Camoufox: oscpu and buildID are Firefox's own, absent on the Android
++  // device profiles, as in Chrome.
++  [Throws, Constant, Cached, NeedsCallerType,
++   Func="mozilla::dom::AndroidDevice::IsNotEmulated"]
+   readonly attribute DOMString oscpu;
+   // WebKit/Blink support this; Trident/Presto do not.
+   readonly attribute DOMString vendor;
+@@ -188,7 +192,8 @@ partial interface Navigator {
+   readonly attribute DOMString productSub;
+   // WebKit/Blink/Trident/Presto support this.
+   readonly attribute boolean cookieEnabled;
+-  [Throws, Constant, Cached, NeedsCallerType]
++  [Throws, Constant, Cached, NeedsCallerType,
++   Func="mozilla::dom::AndroidDevice::IsNotEmulated"]
+   readonly attribute DOMString buildID;
+ 
+   // WebKit/Blink/Trident/Presto support this.

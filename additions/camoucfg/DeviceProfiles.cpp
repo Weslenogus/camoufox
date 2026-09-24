@@ -39,6 +39,21 @@ static nlohmann::json Pixel10() {
   p["navigator.maxTouchPoints"] = 5;
   p["navigator.vendor"] = "Google Inc.";
 
+  // Chrome's reduced user agent on Android: the model and real Android
+  // version never appear ("Android 10; K" is fixed); the minor version is
+  // always 0.0.0. Every request, and every realm's navigator, carries it.
+  const char* kUserAgent =
+      "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like "
+      "Gecko) Chrome/155.0.0.0 Mobile Safari/537.36";
+  p["navigator.userAgent"] = kUserAgent;
+  p["headers.User-Agent"] = kUserAgent;
+  p["navigator.appVersion"] = std::string(kUserAgent).substr(8);
+  p["navigator.appName"] = "Netscape";
+  p["navigator.appCodeName"] = "Mozilla";
+  p["navigator.product"] = "Gecko";
+  p["navigator.productSub"] = "20030107";
+  p["headers.Accept-Language"] = "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7";
+
   // User-Agent Client Hints of Chrome 155 on Android (155.0.8059.16, the
   // current Android release). Brands follow Chromium's GREASE algorithm for
   // major version 155: order {2, 1, 0}, "Not(A:Brand" version 24.

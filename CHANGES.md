@@ -356,3 +356,22 @@ as Arial do not resolve; the generic-family prefs come through `device:prefs`.
 - `additions/browser/fonts/android/DroidSansMono.ttf`: new file (binary font, 108128 bytes)
 - `additions/browser/fonts/android/NotoColorEmoji.ttf`: new file (binary font, 5054984 bytes)
 - `tests/patches/android-fonts.py`: new file, L1-107
+
+## Task 13 - User agent, Accept-Language, WebRTC host candidates
+
+Chrome's reduced Android user agent (`Mozilla/5.0 (Linux; Android 10; K)
+AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36`)
+on every request -- documents, subresources, fetch, workers, WebSockets -- and
+in every realm's `navigator.userAgent`/`appVersion`; `Accept-Language`
+`fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7`; Chrome's `productSub`. Firefox's own
+`navigator.oscpu`, `navigator.buildID` and `taintEnabled()` are absent on the
+profile (gate `AndroidDevice::IsNotEmulated`). WebRTC host candidates stay
+random `<uuid>.local` mDNS names -- what Chrome on Android sends -- and the
+guard pins that no LAN address or hostname appears in any candidate.
+
+- `patches/android/android-13-network-headers.patch` (patch; lines in the patched source tree):
+  - `dom/base/AndroidDevice.cpp`: L31-35, L39-44
+  - `dom/base/AndroidDevice.h`: L30-32
+  - `dom/webidl/Navigator.webidl`: L61-62, L182-185, L195-196
+- `additions/camoucfg/DeviceProfiles.cpp`: L42-56
+- `tests/patches/android-network-headers.py`: new file, L1-134
