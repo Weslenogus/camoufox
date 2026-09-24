@@ -75,3 +75,33 @@ with the emulation is never reused without it. The switch is set in
 - `settings/camoucfg.jvv`: L315-316
 - `settings/properties.json`: L115-116
 - `tests/patches/android-arm-nan.py`: new file, L1-222
+
+## Task 2 - Navigator: platform, cores, memory, touch points, vendor
+
+The profile sets `navigator.platform` "Linux aarch64", `hardwareConcurrency`
+8, `maxTouchPoints` 5 and the two members Firefox lacks: `navigator.vendor`
+"Google Inc." (Firefox returns "") and `navigator.deviceMemory` 8 (Chrome's
+value for 12 GB: rounded down to a power of two and capped at 8).
+`deviceMemory` is a new `[SecureContext]` member on `Navigator` and
+`WorkerNavigator`, gated by `AndroidDevice::HasDeviceMemory` so it exists only
+when configured, and read from one place so every realm agrees (window,
+iframes, dedicated, shared and service workers). `vendor` and
+`maxTouchPoints` stay Window-only, as in every browser. `dom/base/AndroidDevice`
+holds the WebIDL gates the Android changes share. Profile values are now
+round-tripped through the JSON parser so they are typed exactly like the same
+values written in `CAMOU_CONFIG`.
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L32-39, L44, L46-48, L50-54
+- `patches/android/android-02-navigator.patch` (patch; lines in the patched source tree):
+  - `dom/base/AndroidDevice.cpp`: L1-26
+  - `dom/base/AndroidDevice.h`: L1-31
+  - `dom/base/Navigator.cpp`: L9, L564-571, L774-778
+  - `dom/base/Navigator.h`: L180
+  - `dom/base/moz.build`: L562-569
+  - `dom/webidl/Navigator.webidl`: L310-318
+  - `dom/webidl/WorkerNavigator.webidl`: L14
+  - `dom/workers/WorkerNavigator.cpp`: L7, L260-265
+  - `dom/workers/WorkerNavigator.h`: L111
+- `settings/camoucfg.jvv`: L37-38
+- `settings/properties.json`: L15-16
+- `tests/patches/android-navigator.py`: new file, L1-179

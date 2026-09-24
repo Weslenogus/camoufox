@@ -12,6 +12,8 @@
   { "property": "navigator.product", "type": "str" },
   { "property": "navigator.productSub", "type": "str" },
   { "property": "navigator.maxTouchPoints", "type": "uint" },
+  { "property": "navigator.deviceMemory", "type": "double" },
+  { "property": "navigator.vendor", "type": "str" },
   { "property": "navigator.cookieEnabled", "type": "bool" },
   { "property": "navigator.globalPrivacyControl", "type": "bool" },
   { "property": "navigator.buildID", "type": "str" },

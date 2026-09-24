@@ -34,6 +34,8 @@
     "navigator.doNotTrack": "str[0, 1, unspecified]",
     "navigator.hardwareConcurrency": "int[>0]",
     "navigator.maxTouchPoints": "int[>=0]",
+    "navigator.deviceMemory": "double[>0]",
+    "navigator.vendor": "str",
     "navigator.cookieEnabled": "bool",
     "navigator.globalPrivacyControl": "bool",
     "navigator.onLine": "bool",

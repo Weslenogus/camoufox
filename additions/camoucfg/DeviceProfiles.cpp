@@ -29,14 +29,29 @@ static nlohmann::json Pixel10() {
   // bit pattern (0x7FC00000), not x86's 0xFFC00000.
   p["cpu:armDefaultNaN"] = true;
 
+  // Tensor G5: 8 cores (1 + 5 + 2), 12 GB of RAM. Chrome reports
+  // deviceMemory rounded down to a power of two and capped at 8.
+  p["navigator.platform"] = "Linux aarch64";
+  p["navigator.hardwareConcurrency"] = 8;
+  p["navigator.deviceMemory"] = 8;
+  p["navigator.maxTouchPoints"] = 5;
+  p["navigator.vendor"] = "Google Inc.";
+
   return p;
 }
 
 nlohmann::json Lookup(const std::string& name) {
+  nlohmann::json profile;
   if (name == "pixel10") {
-    return Pixel10();
+    profile = Pixel10();
+  } else {
+    return nullptr;
   }
-  return nullptr;
+  // Round-trip through the parser so every value is typed exactly as the
+  // same value written in CAMOU_CONFIG would be: a non-negative integer
+  // literal in C++ is a signed JSON number, but parses as an unsigned one,
+  // and MaskConfig::GetUint32 accepts only the latter.
+  return nlohmann::json::parse(profile.dump());
 }
 
 bool Expand(nlohmann::json& config) {
