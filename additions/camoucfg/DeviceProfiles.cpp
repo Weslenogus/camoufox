@@ -37,6 +37,32 @@ static nlohmann::json Pixel10() {
   p["navigator.maxTouchPoints"] = 5;
   p["navigator.vendor"] = "Google Inc.";
 
+  // User-Agent Client Hints of Chrome 155 on Android (155.0.8059.16, the
+  // current Android release). Brands follow Chromium's GREASE algorithm for
+  // major version 155: order {2, 1, 0}, "Not(A:Brand" version 24.
+  // architecture and bitness are empty on a phone: Chrome only fills them in
+  // for desktop and XR form factors.
+  p["userAgentData:brands"] = nlohmann::json::array({
+      {{"brand", "Google Chrome"}, {"version", "155"}},
+      {{"brand", "Chromium"}, {"version", "155"}},
+      {{"brand", "Not(A:Brand"}, {"version", "24"}},
+  });
+  p["userAgentData:fullVersionList"] = nlohmann::json::array({
+      {{"brand", "Google Chrome"}, {"version", "155.0.8059.16"}},
+      {{"brand", "Chromium"}, {"version", "155.0.8059.16"}},
+      {{"brand", "Not(A:Brand"}, {"version", "24.0.0.0"}},
+  });
+  p["userAgentData:uaFullVersion"] = "155.0.8059.16";
+  p["userAgentData:mobile"] = true;
+  p["userAgentData:platform"] = "Android";
+  p["userAgentData:platformVersion"] = "17.0.0";
+  p["userAgentData:model"] = "Pixel 10";
+  p["userAgentData:architecture"] = "";
+  p["userAgentData:bitness"] = "";
+  p["userAgentData:wow64"] = false;
+  p["userAgentData:formFactors"] = nlohmann::json::array({"Mobile"});
+  p["clientHints:sendHighEntropy"] = true;
+
   // Platform defaults that Gecko keys on prefs. Chrome on Android has no
   // Document Picture-in-Picture (the rest of the desktop-only APIs --
   // EyeDropper, WebHID, Window Management, Local Font Access, Window Controls

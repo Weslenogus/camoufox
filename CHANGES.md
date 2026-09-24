@@ -159,3 +159,34 @@ Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
   - `dom/webidl/Window.webidl`: L716, L718, L722-726, L728
   - `dom/webidl/moz.build`: L499, L845
 - `tests/patches/android-api-stubs.py`: new file, L1-115
+
+## Task 5 - User-Agent Client Hints
+
+User-Agent Client Hints, which Firefox lacks entirely. `navigator.userAgentData`
+(`NavigatorUAData`, window and workers, secure contexts) with `brands`,
+`mobile`, `platform`, `getHighEntropyValues()` and `toJSON()`, and the
+`Sec-CH-UA` request headers, built from one source (`camoucfg/UAClientHints.hpp`)
+so the page's view and the wire agree. Chrome 155's brand list follows
+Chromium's GREASE algorithm; architecture and bitness are empty and
+formFactors is ["Mobile"], as Chrome reports on a phone. Headers go only to
+potentially trustworthy URLs (https, localhost), sorted by name as Chrome
+sends them; the high-entropy ones (arch, bitness, model, platform-version,
+full-version-list) are gated by `clientHints:sendHighEntropy`, which the
+profile sets. Without `userAgentData:brands` there are no client hints at all.
+
+- `patches/android/android-05-client-hints.patch` (patch; lines in the patched source tree):
+  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L782-789
+  - `dom/base/Navigator.h`: L45, L183, L332
+  - `dom/base/NavigatorUAData.cpp`: L1-119
+  - `dom/base/NavigatorUAData.h`: L1-54
+  - `dom/base/moz.build`: L579-585
+  - `dom/webidl/NavigatorUAData.webidl`: L1-56
+  - `dom/webidl/moz.build`: L845
+  - `dom/workers/WorkerNavigator.cpp`: L8, L60, L92-93, L264-274
+  - `dom/workers/WorkerNavigator.h`: L33, L55, L114
+  - `netwerk/protocol/http/nsHttpHandler.cpp`: L17-18, L750-764
+- `additions/camoucfg/DeviceProfiles.cpp`: L40-65
+- `additions/camoucfg/UAClientHints.hpp`: new file, L1-118
+- `settings/camoucfg.jvv`: L322-338
+- `settings/properties.json`: L119-131
+- `tests/patches/android-client-hints.py`: new file, L1-160

@@ -116,5 +116,17 @@
   { "property": "device:profile", "type": "str" },
   { "property": "device:android", "type": "bool" },
   { "property": "device:prefs", "type": "dict" },
-  { "property": "cpu:armDefaultNaN", "type": "bool" }
+  { "property": "cpu:armDefaultNaN", "type": "bool" },
+  { "property": "userAgentData:brands", "type": "array" },
+  { "property": "userAgentData:fullVersionList", "type": "array" },
+  { "property": "userAgentData:uaFullVersion", "type": "str" },
+  { "property": "userAgentData:mobile", "type": "bool" },
+  { "property": "userAgentData:platform", "type": "str" },
+  { "property": "userAgentData:platformVersion", "type": "str" },
+  { "property": "userAgentData:model", "type": "str" },
+  { "property": "userAgentData:architecture", "type": "str" },
+  { "property": "userAgentData:bitness", "type": "str" },
+  { "property": "userAgentData:wow64", "type": "bool" },
+  { "property": "userAgentData:formFactors", "type": "array" },
+  { "property": "clientHints:sendHighEntropy", "type": "bool" }
 ]

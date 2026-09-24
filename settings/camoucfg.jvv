@@ -319,5 +319,21 @@
     "@DEVICE_PREFS": {
         "/^[\\w.\\-]+$/": "bool | int | str"
     },
-    "cpu:armDefaultNaN": "bool"
+    "cpu:armDefaultNaN": "bool",
+    "userAgentData:brands": "array[@UA_BRAND]",
+    "userAgentData:fullVersionList": "array[@UA_BRAND]",
+    "userAgentData:uaFullVersion": "str",
+    "userAgentData:mobile": "bool",
+    "userAgentData:platform": "str",
+    "userAgentData:platformVersion": "str",
+    "userAgentData:model": "str",
+    "userAgentData:architecture": "str",
+    "userAgentData:bitness": "str",
+    "userAgentData:wow64": "bool",
+    "userAgentData:formFactors": "array[str]",
+    "clientHints:sendHighEntropy": "bool",
+    "@UA_BRAND": {
+        "*brand": "str",
+        "*version": "str"
+    }
 }
