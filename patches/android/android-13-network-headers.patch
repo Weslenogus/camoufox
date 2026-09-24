@@ -1,5 +1,5 @@
 diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
-index 99aac18e54..43944fea2b 100644
+index 9e10603580..26bbd5845e 100644
 --- a/dom/base/AndroidDevice.cpp
 +++ b/dom/base/AndroidDevice.cpp
 @@ -28,14 +28,20 @@ bool AndroidDevice::HasDeviceMemory(JSContext*, JSObject*) {

@@ -1,13 +1,13 @@
 diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
-index 5424458c26..99aac18e54 100644
+index 5424458c26..9e10603580 100644
 --- a/dom/base/AndroidDevice.cpp
 +++ b/dom/base/AndroidDevice.cpp
 @@ -3,6 +3,8 @@
  #include "mozilla/dom/AndroidDevice.h"
  
  #include "MaskConfig.hpp"
++#include "mozilla/BasePrincipal.h"
 +#include "nsContentUtils.h"
-+#include "nsIPrincipal.h"
  
  namespace mozilla::dom {
  
