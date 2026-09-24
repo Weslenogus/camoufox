@@ -280,12 +280,12 @@ Captures stream synthetic frames and tone -- never the host's devices -- and
 
 - `patches/android/android-09-media-devices.patch` (patch; lines in the patched source tree):
   - `dom/bindings/Bindings.conf`: L400-404, L505-510
-  - `dom/media/AndroidMediaDevices.cpp`: L1-296
+  - `dom/media/AndroidMediaDevices.cpp`: L1-298
   - `dom/media/AndroidMediaDevices.h`: L1-66
   - `dom/media/MediaDeviceInfo.cpp`: L7, L9, L43-71
   - `dom/media/MediaDeviceInfo.h`: L9, L11, L23-24, L43-45, L51, L53-72
   - `dom/media/MediaDevices.cpp`: L7, L347-379, L538, L540-559
-  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1195, L2437-2466, L3477-3483
+  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1194, L2436-2465, L3476-3482
   - `dom/media/moz.build`: L264
   - `dom/media/webrtc/MediaEngineFake.cpp`: L7-8, L89-92, L141-143, L146-149, L153-156, L164, L186, L217-220, L635-636
   - `dom/webidl/InputDeviceInfo.webidl`: L1-15
@@ -657,5 +657,7 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-canvas-text.py`: L10-13, L68
 - `tests/patches/android-client-hints.py`: L63, L76-77, L80-81, L83
 - `tests/patches/android-media-capabilities.py`: L28, L39, L41, L44-45, L47
+- `tests/patches/android-media-devices.py`: L26-33, L35, L59-62, L64
 - `tests/patches/android-touch.py`: L18-20, L86-87, L89-93, L96-99, L101, L103-104, L153
 - `tests/patches/android-webgl.py`: L98-103, L105-106, L108
+- `tests/patches/helpers.py`: L99-102, L109-110

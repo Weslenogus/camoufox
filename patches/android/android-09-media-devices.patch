@@ -29,10 +29,10 @@ index f75e813e05..c471a4261c 100644
      'nativeType': 'mozilla::DOMMediaStream'
 diff --git a/dom/media/AndroidMediaDevices.cpp b/dom/media/AndroidMediaDevices.cpp
 new file mode 100644
-index 0000000000..50e408140c
+index 0000000000..c79859b8de
 --- /dev/null
 +++ b/dom/media/AndroidMediaDevices.cpp
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,298 @@
 +/* This Source Code Form is subject to the terms of the Mozilla Public
 + * License, v. 2.0. If a copy of the MPL was not distributed with this file,
 + * You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -304,6 +304,8 @@ index 0000000000..50e408140c
 +                                      MediaTrackSettings& aOut) {
 +  const Camera* camera = FindCamera(aRawName);
 +  if (camera && !camera->mFacingMode.IsEmpty()) {
++    // The source may already have reported one.
++    aOut.mFacingMode.Reset();
 +    aOut.mFacingMode.Construct(camera->mFacingMode);
 +  }
 +}
@@ -595,7 +597,7 @@ index 31490e30a5..aba06b0a39 100644
      bool exposeLabel = legacy ? capturePermitted : exposeInfo;
      infos.AppendElement(MakeRefPtr<MediaDeviceInfo>(
 diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
-index cc38a8f750..a1aff4b2ae 100644
+index cc38a8f750..29c4a816c8 100644
 --- a/dom/media/MediaManager.cpp
 +++ b/dom/media/MediaManager.cpp
 @@ -4,6 +4,7 @@
@@ -606,7 +608,7 @@ index cc38a8f750..a1aff4b2ae 100644
  #include "AudioCaptureTrack.h"
  #include "AudioDeviceInfo.h"
  #include "AudioStreamTrack.h"
-@@ -1170,11 +1171,28 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
+@@ -1170,11 +1171,27 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
  void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
    MOZ_ASSERT(NS_IsMainThread());
    Source()->GetSettings(aOutSettings);
@@ -625,17 +627,16 @@ index cc38a8f750..a1aff4b2ae 100644
 +      GetMediaSource() != MediaSourceEnum::Screen &&
 +      GetMediaSource() != MediaSourceEnum::Window &&
 +      GetMediaSource() != MediaSourceEnum::Browser) {
-+    // A capture device reports the phone's camera or microphone.
++    // A capture device reports the phone's camera or microphone. Its
++    // deviceId and groupId are added by DeviceListener::GetCapabilities.
 +    AndroidMediaDevices::GetCapabilities(Kind(), mRawDevice->mRawName,
 +                                         /* aTrack */ true, aOutCapabilities);
-+    aOutCapabilities.mDeviceId.Construct(mID);
-+    aOutCapabilities.mGroupId.Construct(mGroupID);
 +    return;
 +  }
    Source()->GetCapabilities(aOutCapabilities);
  }
  
-@@ -2416,6 +2434,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+@@ -2416,6 +2433,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
      GuessVideoDeviceGroupIDs(*devices, audios);
    }
  
@@ -672,7 +673,7 @@ index cc38a8f750..a1aff4b2ae 100644
    return devices;
  }
  
-@@ -3426,6 +3474,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
+@@ -3426,6 +3473,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
                // after a browser restart the fingerprint is not bigger.
                groupId.AppendInt(windowId);
                nsContentUtils::AnonymizeId(groupId, aOriginKey);
