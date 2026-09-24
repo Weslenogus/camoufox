@@ -211,7 +211,7 @@ index 0000000000..3af675d529
 +#endif  // mozilla_dom_ContactsManager_h
 diff --git a/dom/base/NDEFReader.cpp b/dom/base/NDEFReader.cpp
 new file mode 100644
-index 0000000000..4878fe35fe
+index 0000000000..f4452c7e32
 --- /dev/null
 +++ b/dom/base/NDEFReader.cpp
 @@ -0,0 +1,346 @@
@@ -512,14 +512,14 @@ index 0000000000..4878fe35fe
 +    JSContext* aCx,
 +    const StringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit& aMessage,
 +    const NDEFWriteOptions& aOptions, ErrorResult& aRv) {
-+  return Refuse(aOptions.mSignal.WasPassed() ? &aOptions.mSignal.Value()
++  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
 +                                             : nullptr,
 +                aRv);
 +}
 +
 +already_AddRefed<Promise> NDEFReader::MakeReadOnly(
 +    const NDEFMakeReadOnlyOptions& aOptions, ErrorResult& aRv) {
-+  return Refuse(aOptions.mSignal.WasPassed() ? &aOptions.mSignal.Value()
++  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
 +                                             : nullptr,
 +                aRv);
 +}
