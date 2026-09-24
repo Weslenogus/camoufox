@@ -368,5 +368,6 @@
     "screen.safeAreaInsetTop": "double[>=0]",
     "screen.safeAreaInsetBottom": "double[>=0]",
     "screen.safeAreaInsetLeft": "double[>=0]",
-    "screen.safeAreaInsetRight": "double[>=0]"
+    "screen.safeAreaInsetRight": "double[>=0]",
+    "automation:hideStackFrames": "bool"
 }

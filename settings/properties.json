@@ -146,5 +146,6 @@
   { "property": "screen.safeAreaInsetTop", "type": "double" },
   { "property": "screen.safeAreaInsetBottom", "type": "double" },
   { "property": "screen.safeAreaInsetLeft", "type": "double" },
-  { "property": "screen.safeAreaInsetRight", "type": "double" }
+  { "property": "screen.safeAreaInsetRight", "type": "double" },
+  { "property": "automation:hideStackFrames", "type": "bool" }
 ]

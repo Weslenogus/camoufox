@@ -1,0 +1,146 @@
+diff --git a/js/public/AutomationFrames.h b/js/public/AutomationFrames.h
+new file mode 100644
+index 0000000000..dba4847955
+--- /dev/null
++++ b/js/public/AutomationFrames.h
+@@ -0,0 +1,30 @@
++/* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 2 -*-
++ * vim: set ts=8 sts=2 et sw=2 tw=80:
++ * This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this
++ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Camoufox: keep automation frames out of page-visible stacks. */
++
++#ifndef js_AutomationFrames_h
++#define js_AutomationFrames_h
++
++#include "jstypes.h"
++
++namespace JS {
++
++/**
++ * Hide the frames automation leaves on the stack when it calls into a page --
++ * Juggler's own scripts (chrome://juggler/...) and the code it evaluates
++ * ("debugger eval code") -- from every stack a non-system caller can observe:
++ * Error.prototype.stack, SavedFrame accessors, DOM exception stacks. Juggler
++ * runs its page-side scripts with the page's principal, so ordinary
++ * principal-based frame filtering keeps them visible.
++ *
++ * Process-wide; set once before any script runs.
++ */
++extern JS_PUBLIC_API void SetHideAutomationFrames(bool value);
++
++}  // namespace JS
++
++#endif /* js_AutomationFrames_h */
+diff --git a/js/src/moz.build b/js/src/moz.build
+index d433899af7..7c403042b0 100644
+--- a/js/src/moz.build
++++ b/js/src/moz.build
+@@ -103,6 +103,7 @@ EXPORTS.js += [
+     "../public/Array.h",
+     "../public/ArrayBuffer.h",
+     "../public/ArrayBufferMaybeShared.h",
++    "../public/AutomationFrames.h",
+     "../public/BigInt.h",
+     "../public/BuildId.h",
+     "../public/CallAndConstruct.h",
+diff --git a/js/src/vm/SavedStacks.cpp b/js/src/vm/SavedStacks.cpp
+index 9c25e2753a..c9f9d67e67 100644
+--- a/js/src/vm/SavedStacks.cpp
++++ b/js/src/vm/SavedStacks.cpp
+@@ -15,6 +15,7 @@
+ #include "builtin/Number.h"
+ #include "gc/GCContext.h"
+ #include "gc/HashUtil.h"
++#include "js/AutomationFrames.h"  // JS::SetHideAutomationFrames
+ #include "js/CharacterEncoding.h"
+ #include "js/ColumnNumber.h"  // JS::LimitedColumnNumberOneOrigin, JS::TaggedColumnNumberOneOrigin
+ #include "js/ErrorReport.h"           // JSErrorBase
+@@ -614,9 +615,43 @@ bool SavedFrame::construct(JSContext* cx, unsigned argc, Value* vp) {
+   return false;
+ }
+ 
++// Camoufox: see js/AutomationFrames.h.
++static bool gHideAutomationFrames = false;
++
++static bool AtomStartsWith(JSAtom* aAtom, const char* aPrefix) {
++  const size_t length = strlen(aPrefix);
++  if (aAtom->length() < length) {
++    return false;
++  }
++  for (size_t i = 0; i < length; i++) {
++    if (aAtom->latin1OrTwoByteChar(i) != char16_t(aPrefix[i])) {
++      return false;
++    }
++  }
++  return true;
++}
++
++// Whether |frame| is automation's -- Juggler's page-side scripts or code it
++// evaluated -- and so must be hidden from a caller with |principals|. Trusted
++// (system) callers, and callers that asked for no filtering, see everything.
++static bool IsHiddenAutomationFrame(JSContext* cx, JSPrincipals* principals,
++                                    SavedFrame* frame) {
++  if (!gHideAutomationFrames || !principals ||
++      principals == cx->runtime()->trustedPrincipals()) {
++    return false;
++  }
++  JSAtom* source = frame->getSource();
++  return source && (AtomStartsWith(source, "chrome://juggler/") ||
++                    AtomStartsWith(source, "debugger eval code"));
++}
++
+ static bool SavedFrameSubsumedByPrincipals(JSContext* cx,
+                                            JSPrincipals* principals,
+                                            Handle<SavedFrame*> frame) {
++  if (IsHiddenAutomationFrame(cx, principals, frame)) {
++    return false;
++  }
++
+   auto subsumes = cx->runtime()->securityCallbacks->subsumes;
+   if (!subsumes) {
+     return true;
+@@ -696,7 +731,8 @@ JS_PUBLIC_API JSObject* GetFirstSubsumedSavedFrame(
+ 
+   auto matcher = [subsumes](JSContext* cx, JSPrincipals* principals,
+                             Handle<SavedFrame*> frame) -> bool {
+-    return subsumes(principals, frame->getPrincipals());
++    return !IsHiddenAutomationFrame(cx, principals, frame) &&
++           subsumes(principals, frame->getPrincipals());
+   };
+ 
+   bool skippedAsync;
+@@ -2143,3 +2179,7 @@ JS_PUBLIC_API bool ConstructSavedFrameStackSlow(
+ 
+ }  // namespace ubi
+ }  // namespace JS
++
++JS_PUBLIC_API void JS::SetHideAutomationFrames(bool value) {
++  js::gHideAutomationFrames = value;
++}
+diff --git a/js/xpconnect/src/XPCJSContext.cpp b/js/xpconnect/src/XPCJSContext.cpp
+index 01bdf8f76e..2babfa5299 100644
+--- a/js/xpconnect/src/XPCJSContext.cpp
++++ b/js/xpconnect/src/XPCJSContext.cpp
+@@ -8,6 +8,7 @@
+ 
+ #include "MaskConfig.hpp"
+ #include "js/ArmNaN.h"
++#include "js/AutomationFrames.h"
+ 
+ #include "xpcprivate.h"
+ #include "xpcpublic.h"
+@@ -1244,6 +1245,11 @@ nsresult XPCJSContext::Initialize() {
+   if (MaskConfig::CheckBool("cpu:armDefaultNaN")) {
+     JS::SetUseArmDefaultNaN(true);
+   }
++  // Camoufox: hide automation's frames from page-visible stacks (see
++  // js/AutomationFrames.h).
++  if (MaskConfig::CheckBool("automation:hideStackFrames")) {
++    JS::SetHideAutomationFrames(true);
++  }
+ 
+   if (StaticPrefs::javascript_options_external_thread_pool_DoNotUseDirectly()) {
+     size_t threadCount = TaskController::GetPoolThreadCount();

@@ -390,3 +390,27 @@ function.
   - `dom/permission/PermissionUtils.cpp`: L7-8, L69-80
   - `dom/permission/moz.build`: L38-40
 - `tests/patches/android-permissions.py`: new file, L1-79
+
+## Task 15 - Automation markers
+
+No automation marker reaches the page. `navigator.webdriver` stays false and
+on `Navigator.prototype` (deleting it would itself be a marker); no
+Selenium/ChromeDriver/PhantomJS/Puppeteer/Playwright/CDP globals or root
+attributes exist (pinned by the guard). New: stacks captured by page code
+that automation called into -- `page.evaluate` calling a page function, a
+listener fired by an evaluated `click()` -- showed Juggler's frames
+(`chrome://juggler/...`) and `debugger eval code`. Juggler runs its page-side
+scripts with the page's principal, so principal filtering kept them; with
+`automation:hideStackFrames` (set by the profile) SpiderMonkey hides them
+from every non-system observer (`Error.stack`, SavedFrame, DOM exceptions),
+through the new `js/AutomationFrames.h`.
+
+- `patches/android/android-15-automation.patch` (patch; lines in the patched source tree):
+  - `js/public/AutomationFrames.h`: L1-30
+  - `js/src/moz.build`: L106
+  - `js/src/vm/SavedStacks.cpp`: L18, L618-647, L651-654, L734-735, L2182-2185
+  - `js/xpconnect/src/XPCJSContext.cpp`: L11, L1248-1252
+- `additions/camoucfg/DeviceProfiles.cpp`: L34-36
+- `settings/camoucfg.jvv`: L371-372
+- `settings/properties.json`: L149-150
+- `tests/patches/android-automation.py`: new file, L1-89

@@ -31,6 +31,9 @@ static nlohmann::json Pixel10() {
   // bit pattern (0x7FC00000), not x86's 0xFFC00000.
   p["cpu:armDefaultNaN"] = true;
 
+  // Page code called by automation sees no automation frames in its stacks.
+  p["automation:hideStackFrames"] = true;
+
   // Tensor G5: 8 cores (1 + 5 + 2), 12 GB of RAM. Chrome reports
   // deviceMemory rounded down to a power of two and capped at 8.
   p["navigator.platform"] = "Linux aarch64";
