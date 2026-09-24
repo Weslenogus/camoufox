@@ -310,6 +310,14 @@ static nlohmann::json Pixel10() {
       {"font.name-list.emoji", "Noto Color Emoji"},
       // WebGPU ships in Chrome on Android, in windows and every worker; a
       // phone always has it, so the host's GPU blocklist is not consulted.
+      // Chrome's Accept headers for documents and images (scripts, styles
+      // and fetches already match).
+      {"network.http.accept",
+       "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,"
+       "image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;"
+       "q=0.7"},
+      {"image.http.accept",
+       "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
       // NetworkInformation (navigator.connection), in windows and workers.
       {"dom.netinfo.enabled", true},
       {"dom.webgpu.enabled", true},

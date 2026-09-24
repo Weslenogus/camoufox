@@ -105,6 +105,14 @@ RequestHeaders() {
       if (!full.empty()) {
         h.emplace_back("Sec-CH-UA-Full-Version-List", SerializeBrandList(full));
       }
+      // RFC 8941 list of strings: "Mobile"
+      std::string formFactors;
+      for (const auto& factor : GetStringList("userAgentData:formFactors")) {
+        formFactors += (formFactors.empty() ? "" : ", ") + Quoted(factor);
+      }
+      if (!formFactors.empty()) {
+        h.emplace_back("Sec-CH-UA-Form-Factors", formFactors);
+      }
     }
     std::stable_sort(h.begin(), h.end(), [](const auto& a, const auto& b) {
       return a.first < b.first;

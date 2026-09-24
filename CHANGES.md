@@ -514,3 +514,19 @@ profile: `effectiveType` "4g", `downlink` 10, `downlinkMax` Infinity, `rtt` 50,
 - `settings/camoucfg.jvv`: L388-394
 - `settings/properties.json`: L163-169
 - `tests/patches/android-languages-connection.py`: new file, L1-133
+
+## Task 21 - Request metadata: Accept, Sec-Fetch, Origin, form factors
+
+Request metadata as Chrome on Android sends it. Chrome's `Accept` header for
+documents and for images (`network.http.accept`, `image.http.accept` through
+`device:prefs`); `Sec-CH-UA-Form-Factors: "Mobile"` joins the high-entropy
+client hints (`camoucfg/UAClientHints.hpp`). Gecko's `Sec-Fetch-*` headers and
+its `Origin` rules already match Chrome's -- Origin on cross-origin and
+non-GET requests, none on a same-origin GET -- and the guard pins them per
+request type (document, image, same-origin and cross-site fetch).
+`Accept-Encoding` keeps Gecko's per-scheme values, which are Chrome's too
+(br and zstd only over HTTPS).
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L313-320
+- `additions/camoucfg/UAClientHints.hpp`: L108-115
+- `tests/patches/android-fetch-metadata.py`: new file, L1-100
