@@ -568,3 +568,17 @@ a window and a worker's OffscreenCanvas.
   - `gfx/thebes/gfxFcPlatformFontList.cpp`: L8, L981-988
 - `additions/camoucfg/DeviceProfiles.cpp`: L314-315
 - `tests/patches/android-canvas-text.py`: new file, L1-89
+
+## Task 24 - Speech synthesis voices
+
+`speechSynthesis.getVoices()` lists exactly Google's network voices, in
+windows and iframes alike: "Google français" (fr-FR), "Google US English"
+(en-US, the default), "Google UK English Female" (en-GB) and "Google español"
+(es-ES), all `localService` false, `voiceURI` equal to the name. Host voices
+(Microsoft, Apple, SAPI5, eSpeak, speech-dispatcher) are never exposed
+(`voices:blockIfNotDefined`), and `speak()` completes
+(`voices:fakeCompletion`). Profile values only; the voice spoofing already
+existed.
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L280-299
+- `tests/patches/android-voices.py`: new file, L1-91

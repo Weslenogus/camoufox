@@ -277,6 +277,26 @@ static nlohmann::json Pixel10() {
   // performance.memory: the JS heap limit Chrome reports on the phone.
   p["performance.memory.jsHeapSizeLimit"] = 2147483648ULL;
 
+  // speechSynthesis: Google's network voices only -- never a host voice --
+  // with US English the default. speak() completes without audio output.
+  {
+    auto voice = [](const char* aName, const char* aLang, bool aDefault) {
+      return nlohmann::json{{"name", aName},
+                            {"voiceURI", aName},
+                            {"lang", aLang},
+                            {"isLocalService", false},
+                            {"isDefault", aDefault}};
+    };
+    p["voices"] = nlohmann::json::array({
+        voice("Google fran\u00e7ais", "fr-FR", false),
+        voice("Google US English", "en-US", true),
+        voice("Google UK English Female", "en-GB", false),
+        voice("Google espa\u00f1ol", "es-ES", false),
+    });
+  }
+  p["voices:blockIfNotDefined"] = true;
+  p["voices:fakeCompletion"] = true;
+
   // Battery: 78%, on battery, four hours left (chargingTime is then
   // Infinity, as the Battery Status API specifies).
   p["battery:level"] = 0.78;
