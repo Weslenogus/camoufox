@@ -582,3 +582,17 @@ existed.
 
 - `additions/camoucfg/DeviceProfiles.cpp`: L280-299
 - `tests/patches/android-voices.py`: new file, L1-91
+
+## Task 25 - Grayscale-only text antialiasing
+
+Android has no subpixel (LCD) text antialiasing. On the profile, a font
+instance's fontconfig render pattern carries no subpixel order
+(`FC_RGBA_NONE`), so neither FreeType's glyph loading nor the scaled font
+used for canvas and page text picks LCD rendering: text is antialiased in
+grayscale only, even on an opaque canvas. Windows builds get ClearType level
+0 (grayscale) through `device:prefs`.
+
+- `patches/android/android-25-grayscale-text.patch` (patch; lines in the patched source tree):
+  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L989-996
+- `additions/camoucfg/DeviceProfiles.cpp`: L336-339
+- `tests/patches/android-text-aa.py`: new file, L1-89

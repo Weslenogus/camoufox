@@ -333,6 +333,10 @@ static nlohmann::json Pixel10() {
       {"font.name-list.emoji", "Noto Color Emoji"},
       // Text is laid out at fractional advances, as on Android.
       {"gfx.text.subpixel-position.force-enabled", true},
+      // No LCD (subpixel) text antialiasing on a phone: ClearType level 0 is
+      // grayscale on Windows builds (fontconfig builds drop the subpixel
+      // order from the font pattern instead).
+      {"gfx.font_rendering.cleartype_params.cleartype_level", 0},
       // WebGPU ships in Chrome on Android, in windows and every worker; a
       // phone always has it, so the host's GPU blocklist is not consulted.
       // Chrome's Accept headers for documents and images (scripts, styles
