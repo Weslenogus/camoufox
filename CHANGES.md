@@ -448,11 +448,12 @@ reports empty adapter info and the host GPU's features and limits. Adapter
 selection ignores `powerPreference`: there is one GPU.
 
 - `patches/android/android-17-webgpu.patch` (patch; lines in the patched source tree):
-  - `dom/webgpu/Adapter.cpp`: L15, L26-49, L63-65, L89-91, L103-105, L296-365, L441-455
+  - `dom/webgpu/Adapter.cpp`: L15, L17, L27-50, L64-66, L90-92, L104-106, L286-293, L305-374, L450-464
   - `dom/webgpu/Adapter.h`: L60-65
   - `dom/webgpu/Instance.cpp`: L7-8, L32-36
   - `dom/webgpu/Instance.h`: L65-67, L75-76
   - `dom/webgpu/moz.build`: L121-123
+  - `dom/webidl/WebGPU.webidl`: L162-166
 - `additions/camoucfg/DeviceProfiles.cpp`: L149-204, L293-297
 - `settings/camoucfg.jvv`: L375-387
 - `settings/properties.json`: L153-162
