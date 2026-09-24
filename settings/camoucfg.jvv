@@ -362,5 +362,11 @@
         "torch": "bool",
         "focusMode": "array[str]",
         "exposureMode": "array[str]"
-    }
+    },
+    "screen.orientation.type": "str[portrait-primary, portrait-secondary, landscape-primary, landscape-secondary]",
+    "screen.orientation.angle": "int[>=0]",
+    "screen.safeAreaInsetTop": "double[>=0]",
+    "screen.safeAreaInsetBottom": "double[>=0]",
+    "screen.safeAreaInsetLeft": "double[>=0]",
+    "screen.safeAreaInsetRight": "double[>=0]"
 }

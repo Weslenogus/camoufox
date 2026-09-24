@@ -151,6 +151,31 @@ static nlohmann::json Pixel10() {
        {"exposureMode", {"continuous", "manual"}}},
   });
 
+  // Screen: 1080x2424 physical at DPR 2.625 is 412x915 CSS px; the status
+  // bar and gesture navigation take 42 px, leaving 412x873 for the page.
+  // Portrait-primary, 24 px safe-area insets top and bottom.
+  p["screen.width"] = 412;
+  p["screen.height"] = 915;
+  p["screen.availWidth"] = 412;
+  p["screen.availHeight"] = 873;
+  p["screen.availTop"] = 0;
+  p["screen.availLeft"] = 0;
+  p["screen.colorDepth"] = 24;
+  p["screen.pixelDepth"] = 24;
+  p["window.devicePixelRatio"] = 2.625;
+  p["window.innerWidth"] = 412;
+  p["window.innerHeight"] = 873;
+  p["window.outerWidth"] = 412;
+  p["window.outerHeight"] = 915;
+  p["window.screenX"] = 0;
+  p["window.screenY"] = 0;
+  p["screen.orientation.type"] = "portrait-primary";
+  p["screen.orientation.angle"] = 0;
+  p["screen.safeAreaInsetTop"] = 24;
+  p["screen.safeAreaInsetBottom"] = 24;
+  p["screen.safeAreaInsetLeft"] = 0;
+  p["screen.safeAreaInsetRight"] = 0;
+
   // Battery: 78%, on battery, four hours left (chargingTime is then
   // Infinity, as the Battery Status API specifies).
   p["battery:level"] = 0.78;

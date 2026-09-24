@@ -308,3 +308,22 @@ dischargingTime 14400, through the existing `battery:*` keys.
   - `dom/webidl/Navigator.webidl`: L137-140
 - `additions/camoucfg/DeviceProfiles.cpp`: L154-159
 - `tests/patches/android-battery.py`: new file, L1-51
+
+## Task 11 - Screen, viewport, orientation and safe areas
+
+The phone's screen: 412x915 CSS px (1080x2424 at DPR 2.625), available area
+412x873, color depth 24, `devicePixelRatio` 2.625, inner 412x873 and outer
+412x915, through the existing screen/window keys. New: `screen.orientation`
+reports `screen.orientation.type`/`angle` (portrait-primary, 0) and the
+orientation media query follows it; `env(safe-area-inset-*)` resolves to the
+configured insets (24 px top and bottom) instead of the host's zeros.
+
+- `patches/android/android-11-screen.patch` (patch; lines in the patched source tree):
+  - `dom/base/ScreenOrientation.cpp`: L7-8, L696-731, L733-735, L750-752, L775-778, L797-800
+  - `dom/base/nsScreen.cpp`: L218-222
+  - `layout/style/GeckoBindings.cpp`: L9-10, L1785-1795
+  - `layout/style/nsMediaFeatures.cpp`: L233-242
+- `additions/camoucfg/DeviceProfiles.cpp`: L154-178
+- `settings/camoucfg.jvv`: L365-371
+- `settings/properties.json`: L143-149
+- `tests/patches/android-screen.py`: new file, L1-100
