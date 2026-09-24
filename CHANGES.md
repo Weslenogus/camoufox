@@ -471,7 +471,7 @@ the same contact geometry. There is still only one pointer, and Gecko's
 compatibility mouse events and the click follow as before.
 
 - `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
-  - `dom/events/PointerEventHandler.cpp`: L7-8, L28-31, L992-1084, L1485-1491
+  - `dom/events/PointerEventHandler.cpp`: L26-29, L990-1082, L1483-1489
 - `tests/patches/android-touch-trusted.py`: new file, L1-94
 
 ## Task 19 - mediump at half precision

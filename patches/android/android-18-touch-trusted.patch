@@ -1,17 +1,8 @@
 diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
-index 918f8ef045..5824f8704f 100644
+index 918f8ef045..66c6c37535 100644
 --- a/dom/events/PointerEventHandler.cpp
 +++ b/dom/events/PointerEventHandler.cpp
-@@ -4,6 +4,8 @@
- 
- #include "PointerEventHandler.h"
- 
-+#include <cmath>
-+
- #include "EventStateManager.h"
- #include "PointerEvent.h"
- #include "PointerLockManager.h"
-@@ -23,6 +25,10 @@
+@@ -23,6 +23,10 @@
  #include "nsRFPService.h"
  #include "nsUserCharacteristics.h"
  
@@ -22,7 +13,7 @@ index 918f8ef045..5824f8704f 100644
  #include "mozilla/dom/Touch.h"
  
  namespace mozilla {
-@@ -983,6 +989,99 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
+@@ -983,6 +987,99 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
  // is tracked under; touch identifiers are small non-negative integers.
  static constexpr int32_t kEmulatedFingerForMouse = -1;
  
@@ -101,11 +92,11 @@ index 918f8ef045..5824f8704f 100644
 +  // The same finger as the pointer event just dispatched.
 +  const dom::Touch::EmulatedFinger finger =
 +      dom::Touch::FingerFor(kEmulatedFingerForMouse, false);
-+  const float scale = presContext->CSSToDevPixelScale().scale;
++  // Touch.radiusX/Y are reported as stored, in CSS pixels, like the pointer
++  // event's width/height (twice the radius).
 +  RefPtr<dom::Touch> touch = new dom::Touch(
 +      kEmulatedTouchIdentifier, aMouseEvent.mRefPoint,
-+      LayoutDeviceIntPoint(int32_t(std::lround(finger.mRadiusX * scale)),
-+                           int32_t(std::lround(finger.mRadiusY * scale))),
++      LayoutDeviceIntPoint(finger.mRadiusX, finger.mRadiusY),
 +      finger.mRotationAngle, finger.mForce);
 +  touch->SetTouchTarget(target);
 +  touch->mChanged = true;
@@ -122,7 +113,7 @@ index 918f8ef045..5824f8704f 100644
  /* static */
  void PointerEventHandler::InitPointerEventFromMouse(
      WidgetPointerEvent* aPointerEvent, const WidgetMouseEvent* aMouseEvent,
-@@ -1383,6 +1482,13 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
+@@ -1383,6 +1480,13 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
      // dispatch mouse boundary events later.
      mouseEvent->mSynthesizeMoveAfterDispatch |=
          event.mSynthesizeMoveAfterDispatch;
