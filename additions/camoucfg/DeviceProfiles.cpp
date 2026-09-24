@@ -91,6 +91,8 @@ static nlohmann::json Pixel10() {
   p["webGl:vendor"] = "Imagination Technologies";
   p["webGl:renderer"] = "PowerVR D-Series DXT-48-1536";
   p["webGl:emulateAstc"] = true;
+  // ...and mediump arithmetic in fragment shaders runs at fp16 too.
+  p["webGl:emulateMediumpPrecision"] = true;
   p["webGl:astcProfiles"] = nlohmann::json::array({"ldr"});
   p["webGl:supportedExtensions"] = nlohmann::json::array({
       "ANGLE_instanced_arrays", "EXT_blend_minmax",

@@ -469,3 +469,28 @@ compatibility mouse events and the click follow as before.
 - `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
   - `dom/events/PointerEventHandler.cpp`: L7-8, L28-31, L992-1084, L1485-1491
 - `tests/patches/android-touch-trusted.py`: new file, L1-94
+
+## Task 19 - mediump at half precision
+
+`getShaderPrecisionFormat()` already reported fp16 for mediump; now the
+pixels agree. A new ANGLE translator pass (`EmulateMediumpPrecision`, enabled
+by `webGl:emulateMediumpPrecision` through a new `ShCompileOptions` bit) rounds
+every mediump/lowp float result in a fragment shader to IEEE half precision,
+keeping the top 10 mantissa bits (11 significant, exponent range 2^-24 to
+65504): arithmetic, math built-ins, compound assignments, higher-precision
+values stored into mediump variables, and reads of mediump uniforms and
+inputs. Float literals feeding mediump operations are truncated at compile
+time. The rounding helper is exact in fp32. highp is untouched, and so is
+everything without the option.
+
+- `patches/android/android-19-mediump-precision.patch` (patch; lines in the patched source tree):
+  - `dom/canvas/WebGLShaderValidator.cpp`: L7-8, L75-79
+  - `gfx/angle/checkout/include/GLSLANG/ShaderLang.h`: L421-424
+  - `gfx/angle/checkout/src/compiler/translator/Compiler.cpp`: L28, L865-873
+  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-476
+  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h`: L1-28
+  - `gfx/angle/targets/translator/moz.build`: L230
+- `additions/camoucfg/DeviceProfiles.cpp`: L94-95
+- `settings/camoucfg.jvv`: L387-388
+- `settings/properties.json`: L162-163
+- `tests/patches/android-mediump-precision.py`: new file, L1-178

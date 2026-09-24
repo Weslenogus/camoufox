@@ -159,5 +159,6 @@
   { "property": "webGpu:subgroupMaxSize", "type": "uint" },
   { "property": "webGpu:isFallbackAdapter", "type": "bool" },
   { "property": "webGpu:features", "type": "array" },
-  { "property": "webGpu:limits", "type": "dict" }
+  { "property": "webGpu:limits", "type": "dict" },
+  { "property": "webGl:emulateMediumpPrecision", "type": "bool" }
 ]

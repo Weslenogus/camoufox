@@ -384,5 +384,6 @@
     "webGpu:limits": "@WEBGPU_LIMITS",
     "@WEBGPU_LIMITS": {
         "/^(max|min)\\w+$/": "int[>=0]"
-    }
+    },
+    "webGl:emulateMediumpPrecision": "bool"
 }
