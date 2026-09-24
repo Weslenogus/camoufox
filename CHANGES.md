@@ -278,11 +278,11 @@ Captures stream synthetic frames and tone -- never the host's devices -- and
 `facingMode` constraints select the matching camera.
 
 - `patches/android/android-09-media-devices.patch` (patch; lines in the patched source tree):
-  - `dom/bindings/Bindings.conf`: L400-404
+  - `dom/bindings/Bindings.conf`: L400-404, L505-510
   - `dom/media/AndroidMediaDevices.cpp`: L1-296
   - `dom/media/AndroidMediaDevices.h`: L1-66
   - `dom/media/MediaDeviceInfo.cpp`: L7, L9, L43-71
-  - `dom/media/MediaDeviceInfo.h`: L10, L22-23, L42-44, L50, L52-71
+  - `dom/media/MediaDeviceInfo.h`: L9, L11, L23-24, L43-45, L51, L53-72
   - `dom/media/MediaDevices.cpp`: L7, L347-379, L538, L540-559
   - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1195, L2437-2466, L3477-3483
   - `dom/media/moz.build`: L264
