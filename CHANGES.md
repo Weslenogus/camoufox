@@ -667,4 +667,5 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-touch.py`: L18-20, L86-87, L89-93, L96-99, L101, L103-104, L153
 - `tests/patches/android-voices.py`: L14-20, L65-72, L74-75, L77, L93
 - `tests/patches/android-webgl.py`: L98-103, L105-106, L108
+- `tests/patches/android-webgpu.py`: L61-66, L68-69, L71
 - `tests/patches/helpers.py`: L99-102, L109-110
