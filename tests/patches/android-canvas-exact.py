@@ -53,15 +53,21 @@ PROBE = "async () => {" + SCENE + r"""
 }"""
 
 
+# The probe reads ImageData, which the isolated world may not do (TypedArray
+# data over Xrays is forbidden), so the page defines it and a "mw:" evaluation
+# runs it.
+PAGE = "<!doctype html><title>exact</title><script>window.probe = " + PROBE + ";</script>"
+
+
 async def probe(binary, config):
-    routes = {"/": ("text/html", "<!doctype html><title>exact</title>"),
+    routes = {"/": ("text/html", PAGE),
               "/w.js": ("text/javascript", WORKER_JS)}
     with PageServer(routes) as server:
-        async with launch_raw(binary, config) as page:
+        async with launch_raw(binary, dict(config, allowMainWorld=True)) as page:
             await page.goto(server.url("/"))
-            first = await page.evaluate(PROBE)
+            first = await page.evaluate("mw:window.probe()")
             await page.reload()
-            again = await page.evaluate(PROBE)
+            again = await page.evaluate("mw:window.probe()")
             return first, again
 
 

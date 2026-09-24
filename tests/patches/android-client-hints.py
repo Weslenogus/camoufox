@@ -60,7 +60,7 @@ HINTS = ["architecture", "bitness", "formFactors", "fullVersionList", "model",
          "platformVersion", "uaFullVersion", "wow64"]
 
 PROBE = r"""async (hints) => {
-  const collect = async (nav) => {
+  const collect = async (nav, hints) => {
     if (!('userAgentData' in nav)) return 'absent';
     const d = nav.userAgentData;
     return {
@@ -73,12 +73,14 @@ PROBE = r"""async (hints) => {
   };
   const worker = await new Promise(resolve => {
     const w = new Worker(URL.createObjectURL(new Blob([
-      `onmessage = async e => postMessage(await (${collect.toString()})(navigator));`
+      // collect's source only: the hints travel in the message.
+      `onmessage = async e => postMessage(await (${collect.toString()})(navigator, JSON.parse(e.data)));`
     ], {type: 'text/javascript'})));
     w.onmessage = e => resolve(e.data);
-    w.postMessage(null);
+    w.onerror = e => resolve('worker error: ' + e.message);
+    w.postMessage(JSON.stringify(hints));
   });
-  return {window: await collect(navigator), worker,
+  return {window: await collect(navigator, hints), worker,
           interfaceExposed: 'NavigatorUAData' in window};
 }"""
 

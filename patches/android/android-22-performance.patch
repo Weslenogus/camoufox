@@ -165,7 +165,7 @@ index 0000000000..9a9d25dedb
 +
 +#endif  // mozilla_dom_MemoryInfo_h
 diff --git a/dom/performance/Performance.cpp b/dom/performance/Performance.cpp
-index 3754154ae9..18d55a3716 100644
+index 3754154ae9..a9e9b185e7 100644
 --- a/dom/performance/Performance.cpp
 +++ b/dom/performance/Performance.cpp
 @@ -4,6 +4,8 @@
@@ -182,7 +182,7 @@ index 3754154ae9..18d55a3716 100644
  }
  
 +already_AddRefed<MemoryInfo> Performance::Memory() {
-+  return MemoryInfo::Create(GetOwnerGlobal());
++  return MemoryInfo::Create(GetParentObject());
 +}
 +
  DOMHighResTimeStamp Performance::TimeOrigin() {

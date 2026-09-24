@@ -3,7 +3,9 @@ Verify Android-style permission states (patches/android/android-14-permissions.p
 
 Chrome on a fresh phone answers "prompt" for anything the user has not granted.
 With {"device:profile": "pixel10"} every permission Firefox knows must query as
-"prompt", in the window and in a worker, while:
+"prompt", in the window and in a worker -- except screen-wake-lock, which
+Chrome grants without asking (WakeLockPermissionContext allows screen wake
+locks), so it reads "granted" -- while:
 
   * a real grant -- Playwright's context.grantPermissions() -- still reads
     "granted";
@@ -54,9 +56,10 @@ async def probe(binary, config, grant=None):
 
 
 async def main(binary) -> bool:
-    print("\n=== pixel10: everything defaults to prompt ===")
+    print("\n=== pixel10: everything but screen-wake-lock defaults to prompt ===")
     data = await probe(binary, PIXEL10)
-    ok = compare(data["window"], {n: "prompt" for n in NAMES})
+    ok = compare(data["window"], dict({n: "prompt" for n in NAMES},
+                                      **{"screen-wake-lock": "granted"}))
     ok &= compare(data["worker"], {"geolocation": "prompt", "notifications": "prompt"})
     ok &= compare({k: data[k] for k in ("native", "identity", "ownProperty")},
                   {"native": True, "identity": True, "ownProperty": False})
