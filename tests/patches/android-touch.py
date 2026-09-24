@@ -15,8 +15,9 @@ With {"device:profile": "pixel10"}:
     any-pointer / any-hover, and the legacy touch APIs Android has
     ('ontouchstart' in window, document.createTouch).
 
-The control launch keeps Firefox's shape: 1px automation touches, mouse
-pointers, a fine hovering primary pointer.
+The control launch keeps Firefox's shape: 1px automation touches, Juggler's
+synthesized mouse pointer (input source unknown, so pointerType ""), a fine
+hovering primary pointer.
 
 Run:
     python tests/patches/android-touch.py [--binary /path/to/camoufox-bin]
@@ -82,17 +83,25 @@ def check_tap(log) -> Dict[str, Any]:
 
 
 async def probe(binary, config):
+    # allowMainWorld only unlocks the guard's own "mw:" reads of the page's log.
+    config = dict(config, allowMainWorld=True)
     with PageServer({"/": ("text/html", PAGE)}) as server:
-        async with launch_raw(binary, config, has_touch=True) as page:
+        # Playwright's hasTouch gives Firefox a touchscreen of its own (a coarse
+        # pointer) and stops mouse input from producing pointer events, so the
+        # input shape and the mouse click are read in a context without it:
+        # there, only the profile can make the pointer coarse.
+        async with launch_raw(binary, config) as page:
             await page.goto(server.url("/"))
             shape = await page.evaluate(SHAPE)
-            await page.touchscreen.tap(150, 110)
-            tap1 = await page.evaluate("log.splice(0)")
-            await page.touchscreen.tap(150, 110)
-            tap2 = await page.evaluate("log.splice(0)")
             await page.mouse.click(150, 110)
-            mouse = await page.evaluate("log.splice(0)")
-            return shape, tap1, tap2, mouse
+            mouse = await page.evaluate("mw:log.splice(0)")
+        async with launch_raw(binary, config, has_touch=True) as page:
+            await page.goto(server.url("/"))
+            await page.touchscreen.tap(150, 110)
+            tap1 = await page.evaluate("mw:log.splice(0)")
+            await page.touchscreen.tap(150, 110)
+            tap2 = await page.evaluate("mw:log.splice(0)")
+    return shape, tap1, tap2, mouse
 
 
 async def main(binary) -> bool:
@@ -141,7 +150,7 @@ async def main(binary) -> bool:
         "(pointer: fine)": shape["(pointer: fine)"],
         "tap radiusX": s.get("radiusX"),
         "mouse pointerType": down.get("pointerType"),
-    }, {"(pointer: fine)": True, "tap radiusX": 1, "mouse pointerType": "mouse"})
+    }, {"(pointer: fine)": True, "tap radiusX": 1, "mouse pointerType": ""})
     print("\nPASS" if ok and control else "\nFAIL")
     return ok and control
 

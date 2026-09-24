@@ -252,6 +252,7 @@ the legacy touch APIs Android has are enabled through `device:prefs`.
 
 - `patches/android/android-08-touch.patch` (patch; lines in the patched source tree):
   - `dom/base/nsContentUtils.cpp`: L10022-10039, L10042
+  - `dom/events/EventStateManager.cpp`: L73, L6255-6260
   - `dom/events/PointerEvent.cpp`: L15, L237-242
   - `dom/events/PointerEventHandler.cpp`: L26-27, L982-985, L1001-1016, L1059-1065
   - `dom/events/Touch.cpp`: L7-13, L237-338
@@ -656,4 +657,5 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-canvas-text.py`: L10-13, L68
 - `tests/patches/android-client-hints.py`: L63, L76-77, L80-81, L83
 - `tests/patches/android-media-capabilities.py`: L28, L39, L41, L44-45, L47
+- `tests/patches/android-touch.py`: L18-20, L86-87, L89-93, L96-99, L101, L103-104, L153
 - `tests/patches/android-webgl.py`: L98-103, L105-106, L108
