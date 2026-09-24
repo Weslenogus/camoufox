@@ -596,3 +596,15 @@ grayscale only, even on an opaque canvas. Windows builds get ClearType level
   - `gfx/thebes/gfxFcPlatformFontList.cpp`: L989-996
 - `additions/camoucfg/DeviceProfiles.cpp`: L336-339
 - `tests/patches/android-text-aa.py`: new file, L1-89
+
+## Task 26 - Exact, reproducible canvas pixels
+
+Chrome adds no noise to canvas readbacks. The profile switches off Gecko's
+fingerprinting-protection canvas randomization in normal and private windows,
+including remotely delivered overrides (`device:prefs`), so readbacks are exact
+(`rgb(10,20,30)` reads back as [10, 20, 30, 255], in a worker's OffscreenCanvas
+too) and reproducible: twice from one canvas, across canvases, as
+`toDataURL()`, and after a reload. Profile values and a guard only.
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L353-359
+- `tests/patches/android-canvas-exact.py`: new file, L1-91

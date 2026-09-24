@@ -350,6 +350,13 @@ static nlohmann::json Pixel10() {
       // performance.now() at 1 ms resolution in every realm.
       {"privacy.reduceTimerPrecision", true},
       {"privacy.resistFingerprinting.reduceTimerPrecision.microseconds", 1000},
+      // Canvas pixels are exact and reproducible, as Chrome's are: none of
+      // Gecko's fingerprinting-protection randomization, in normal or private
+      // windows, and no remotely delivered overrides turning it back on.
+      {"privacy.fingerprintingProtection", false},
+      {"privacy.fingerprintingProtection.pbmode", false},
+      {"privacy.fingerprintingProtection.remoteOverrides.enabled", false},
+      {"privacy.resistFingerprinting.pbmode", false},
       // NetworkInformation (navigator.connection), in windows and workers.
       {"dom.netinfo.enabled", true},
       {"dom.webgpu.enabled", true},
