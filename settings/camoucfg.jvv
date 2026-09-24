@@ -309,5 +309,8 @@
     "addons": "array[str]",
     "certificatePaths": "array[str]",
     "certificates": "array[str]",
-    "debug": "bool"
+    "debug": "bool",
+
+    "device:profile": "str[pixel10]",
+    "device:android": "bool"
 }

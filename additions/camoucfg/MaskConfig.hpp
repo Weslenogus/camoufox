@@ -5,6 +5,7 @@ Written by daijro.
 
 #pragma once
 #include "json.hpp"
+#include "DeviceProfiles.hpp"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -83,6 +84,10 @@ inline const nlohmann::json& GetJson() {
     }
 
     jsonConfig = nlohmann::json::parse(jsonString);
+
+    // A "device:profile" key expands into that profile's keys, beneath the
+    // explicit ones. See DeviceProfiles.hpp.
+    DeviceProfiles::Expand(jsonConfig);
   });
 
   return jsonConfig;
@@ -188,6 +193,17 @@ inline std::optional<bool> GetBool(const std::string& key) {
 
 inline bool CheckBool(const std::string& key) {
   return GetBool(key).value_or(false);
+}
+
+/**
+ * Whether the config describes an Android device ("device:android", set by the
+ * Android device profiles). Gates behaviour that is not one spoofed value but
+ * a platform difference: which APIs exist, how input and sensors behave.
+ * CAMOU_CONFIG never changes after startup, so the answer is cached.
+ */
+inline bool IsAndroidDevice() {
+  static const bool android = CheckBool("device:android");
+  return android;
 }
 
 inline std::optional<std::array<uint32_t, 4>> GetRect(

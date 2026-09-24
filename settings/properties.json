@@ -109,5 +109,8 @@
   { "property": "addons", "type": "array" },
   { "property": "certificatePaths", "type": "array" },
   { "property": "certificates", "type": "array" },
-  { "property": "debug", "type": "bool" }
+  { "property": "debug", "type": "bool" },
+
+  { "property": "device:profile", "type": "str" },
+  { "property": "device:android", "type": "bool" }
 ]
