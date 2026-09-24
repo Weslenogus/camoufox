@@ -191,7 +191,30 @@ static nlohmann::json Pixel10() {
       // Android builds keep the legacy touch APIs ('ontouchstart' in window,
       // document.createTouch), as Chrome on Android does.
       {"dom.w3c_touch_events.legacy_apis.enabled", true},
+      // Android's generic families (browser/fonts/android): unstyled text is
+      // sans-serif, as in Chrome on Android; emoji are Noto Color Emoji.
+      {"font.default.x-western", "sans-serif"},
+      {"font.default.x-unicode", "sans-serif"},
+      {"font.default.x-cyrillic", "sans-serif"},
+      {"font.default.el", "sans-serif"},
+      {"font.name.sans-serif.x-western", "Roboto"},
+      {"font.name.sans-serif.x-unicode", "Roboto"},
+      {"font.name.sans-serif.x-cyrillic", "Roboto"},
+      {"font.name.sans-serif.el", "Roboto"},
+      {"font.name.serif.x-western", "Noto Serif"},
+      {"font.name.serif.x-unicode", "Noto Serif"},
+      {"font.name.serif.x-cyrillic", "Noto Serif"},
+      {"font.name.serif.el", "Noto Serif"},
+      {"font.name.monospace.x-western", "Droid Sans Mono"},
+      {"font.name.monospace.x-unicode", "Droid Sans Mono"},
+      {"font.name.monospace.x-cyrillic", "Droid Sans Mono"},
+      {"font.name.monospace.el", "Droid Sans Mono"},
+      {"font.name-list.emoji", "Noto Color Emoji"},
   };
+  // Only Android's fonts are visible: desktop families (Arial, Helvetica,
+  // DejaVu...) and Apple's -apple-system / BlinkMacSystemFont do not resolve.
+  p["fonts"] = nlohmann::json::array(
+      {"Roboto", "Noto Serif", "Droid Sans Mono", "Noto Color Emoji"});
 
   return p;
 }

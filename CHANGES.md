@@ -327,3 +327,32 @@ configured insets (24 px top and bottom) instead of the host's zeros.
 - `settings/camoucfg.jvv`: L365-371
 - `settings/properties.json`: L143-149
 - `tests/patches/android-screen.py`: new file, L1-100
+
+## Task 12 - Android's fonts
+
+Text renders in Android's own fonts, bundled with the browser
+(`browser/fonts/android`, installed beside Twemoji by `browser/fonts/moz.build`):
+AOSP's variable Roboto for `sans-serif`, `system-ui` and unstyled text, AOSP
+Noto Serif for `serif`, Droid Sans Mono for `monospace`, and Noto Color Emoji
+(COLRv1) for emoji, so flags render as coloured flag glyphs. The CSS2
+system-font keywords use Roboto 12px, as Gecko's Android build does. The
+profile's font allowlist (`fonts`) makes those four the only visible
+families, so `-apple-system`, `BlinkMacSystemFont` and desktop families such
+as Arial do not resolve; the generic-family prefs come through `device:prefs`.
+
+- `patches/android/android-12-fonts.patch` (patch; lines in the patched source tree):
+  - `browser/fonts/moz.build`: L8-24
+  - `gfx/thebes/gfxPlatformFontList.cpp`: L2311-2315
+  - `layout/base/nsLayoutUtils.cpp`: L9771, L9773, L9800-9805
+- `additions/camoucfg/DeviceProfiles.cpp`: L194-212, L214-217
+- `additions/browser/fonts/android/README.md`: new file, L1-17
+- `additions/browser/fonts/android/LICENSE-OFL.txt`: new file, L1-94
+- `additions/browser/fonts/android/LICENSE-Apache-2.0.txt`: new file, L1-202
+- `additions/browser/fonts/android/Roboto-Regular.ttf`: new file (binary font, 2371712 bytes)
+- `additions/browser/fonts/android/NotoSerif-Regular.ttf`: new file (binary font, 246740 bytes)
+- `additions/browser/fonts/android/NotoSerif-Bold.ttf`: new file (binary font, 247892 bytes)
+- `additions/browser/fonts/android/NotoSerif-Italic.ttf`: new file (binary font, 249748 bytes)
+- `additions/browser/fonts/android/NotoSerif-BoldItalic.ttf`: new file (binary font, 263080 bytes)
+- `additions/browser/fonts/android/DroidSansMono.ttf`: new file (binary font, 108128 bytes)
+- `additions/browser/fonts/android/NotoColorEmoji.ttf`: new file (binary font, 5054984 bytes)
+- `tests/patches/android-fonts.py`: new file, L1-107

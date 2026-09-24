@@ -1,0 +1,69 @@
+diff --git a/browser/fonts/moz.build b/browser/fonts/moz.build
+index 0ebf2de60f..0b18c825c9 100644
+--- a/browser/fonts/moz.build
++++ b/browser/fonts/moz.build
+@@ -5,3 +5,20 @@
+ if CONFIG["MOZ_WIDGET_TOOLKIT"] in ("windows", "gtk"):
+     DIST_SUBDIR = ""
+     FINAL_TARGET_FILES.fonts += ["TwemojiMozilla.ttf"]
++
++    # Camoufox: Android's system fonts, for the Android device profiles --
++    # Roboto (variable; sans-serif and system-ui), Noto Serif (serif), Droid
++    # Sans Mono (monospace) and Noto Color Emoji, the files Android itself
++    # ships (see android/README). They are activated with Twemoji; the
++    # profile's font allowlist keeps them out of every other fingerprint.
++    # Flat in fonts/, like the packaged font bundles: only fontconfig reads
++    # subfolders.
++    FINAL_TARGET_FILES.fonts += [
++        "android/DroidSansMono.ttf",
++        "android/NotoColorEmoji.ttf",
++        "android/NotoSerif-Bold.ttf",
++        "android/NotoSerif-BoldItalic.ttf",
++        "android/NotoSerif-Italic.ttf",
++        "android/NotoSerif-Regular.ttf",
++        "android/Roboto-Regular.ttf",
++    ]
+diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
+index 55dfb7cf9b..3f967acc44 100644
+--- a/gfx/thebes/gfxPlatformFontList.cpp
++++ b/gfx/thebes/gfxPlatformFontList.cpp
+@@ -2308,6 +2308,11 @@ static void GetSystemUIFontFamilies(
+   // serif font (daijro/camoufox#695). A null provider means there is no
+   // document behind the lookup, where spoofing is the safe default.
+   if (!(aFontVisibilityProvider && aFontVisibilityProvider->IsChrome())) {
++    // Android: system-ui is Roboto, whatever the page's language.
++    if (MaskConfig::IsAndroidDevice()) {
++      *aFamilies.AppendElement() = "Roboto"_ns;
++      return;
++    }
+     if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
+       if (*platform == "MacIntel") {
+         *aFamilies.AppendElement() = "Helvetica"_ns;
+diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
+index 611015d223..1d4f9f62ba 100644
+--- a/layout/base/nsLayoutUtils.cpp
++++ b/layout/base/nsLayoutUtils.cpp
+@@ -9768,8 +9768,9 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+   // and uses probe duration as a probabilistic headless signal.
+   // navigator.platform is set from CAMOU_CONFIG at process start and never
+   // changes, so a single lookup per process is safe.
+-  enum class SpoofedOS { Other, Mac, Win };
++  enum class SpoofedOS { Other, Mac, Win, Android };
+   static const SpoofedOS sSpoofedOS = []() {
++    if (MaskConfig::IsAndroidDevice()) return SpoofedOS::Android;
+     auto platform = MaskConfig::GetString("navigator.platform");
+     if (!platform) return SpoofedOS::Other;
+     const std::string& p = platform.value();
+@@ -9796,6 +9797,12 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+     aStyle.size = 12;
+     return;
+   }
++  if (sSpoofedOS == SpoofedOS::Android) {
++    // What Gecko's own Android build uses (nsLookAndFeel::NativeGetFont).
++    aName = u"Roboto"_ns;
++    aStyle.size = 12;
++    return;
++  }
+   // Linux / iPhone / unspoofed: fall through to upstream behavior.
+ 
+ #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
