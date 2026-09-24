@@ -553,3 +553,18 @@ info. `performance.now()` is pinned to 1 ms resolution in every realm
 - `settings/camoucfg.jvv`: L394-395
 - `settings/properties.json`: L169-170
 - `tests/patches/android-performance.py`: new file, L1-96
+
+## Task 23 - Canvas text metrics
+
+Canvas text measures as it does on the phone: in Roboto (Task 12 makes it the
+sans-serif and default family, so `10px sans-serif` is Roboto), unhinted --
+the font instance's fontconfig pattern drops hinting on the profile, so
+outlines and advances are the font's own -- and at fractional advances
+(`gfx.text.subpixel-position.force-enabled` via `device:prefs`). Widths are
+therefore linear in the font size and identical across repeats and between
+a window and a worker's OffscreenCanvas.
+
+- `patches/android/android-23-canvas-text.patch` (patch; lines in the patched source tree):
+  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L8, L981-988
+- `additions/camoucfg/DeviceProfiles.cpp`: L314-315
+- `tests/patches/android-canvas-text.py`: new file, L1-89
