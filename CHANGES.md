@@ -180,7 +180,9 @@ profile sets. Without `userAgentData:brands` there are no client hints at all.
   - `dom/base/NavigatorUAData.cpp`: L1-119
   - `dom/base/NavigatorUAData.h`: L1-54
   - `dom/base/moz.build`: L579-585
+  - `dom/webidl/Navigator.webidl`: L318-319
   - `dom/webidl/NavigatorUAData.webidl`: L1-56
+  - `dom/webidl/WorkerNavigator.webidl`: L15
   - `dom/webidl/moz.build`: L845
   - `dom/workers/WorkerNavigator.cpp`: L8, L60, L92-93, L264-274
   - `dom/workers/WorkerNavigator.h`: L33, L55, L114

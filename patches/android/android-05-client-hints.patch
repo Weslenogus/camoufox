@@ -273,9 +273,22 @@ index f843ea8d53..32f4db0802 100644
  # ScreenDimensionManager compiled separately for the same reason.
  SOURCES += ["ScreenDimensionManager.cpp"]
  
+diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
+index a15c51d7ba..a726d1d704 100644
+--- a/dom/webidl/Navigator.webidl
++++ b/dom/webidl/Navigator.webidl
+@@ -315,6 +315,8 @@ interface mixin NavigatorDeviceMemory {
+   readonly attribute double deviceMemory;
+ };
+ Navigator includes NavigatorDeviceMemory;
++// Camoufox: navigator.userAgentData (NavigatorUAData.webidl).
++Navigator includes NavigatorUA;
+ 
+ // https://w3c.github.io/contact-picker/#contacts-manager
+ // Camoufox: the Contact Picker, on the Android device profiles only (see
 diff --git a/dom/webidl/NavigatorUAData.webidl b/dom/webidl/NavigatorUAData.webidl
 new file mode 100644
-index 0000000000..872f335e7d
+index 0000000000..26dd0fc8d3
 --- /dev/null
 +++ b/dom/webidl/NavigatorUAData.webidl
 @@ -0,0 +1,56 @@
@@ -333,8 +346,20 @@ index 0000000000..872f335e7d
 +  [SecureContext, SameObject, Func="mozilla::dom::NavigatorUAData::IsEnabled"]
 +  readonly attribute NavigatorUAData userAgentData;
 +};
-+Navigator includes NavigatorUA;
++// Included by Navigator (Navigator.webidl) and WorkerNavigator
++// (WorkerNavigator.webidl).
+diff --git a/dom/webidl/WorkerNavigator.webidl b/dom/webidl/WorkerNavigator.webidl
+index bf48a223f6..f16e5dc645 100644
+--- a/dom/webidl/WorkerNavigator.webidl
++++ b/dom/webidl/WorkerNavigator.webidl
+@@ -12,6 +12,7 @@ WorkerNavigator includes NavigatorLanguage;
+ WorkerNavigator includes NavigatorOnLine;
+ WorkerNavigator includes NavigatorConcurrentHardware;
+ WorkerNavigator includes NavigatorDeviceMemory;
 +WorkerNavigator includes NavigatorUA;
+ WorkerNavigator includes NavigatorStorage;
+ WorkerNavigator includes GlobalPrivacyControl;
+ 
 diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
 index acd3e42fa7..6921360139 100644
 --- a/dom/webidl/moz.build
