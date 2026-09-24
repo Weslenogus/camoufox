@@ -274,6 +274,11 @@ static nlohmann::json Pixel10() {
   p["mediaCapabilities:maxHeight"] = 1080;
   p["mediaCapabilities:maxFramerate"] = 30;
 
+  // navigator.storage.estimate(): the quota Chrome grants an origin on the
+  // phone, and a fresh origin's baseline usage.
+  p["storage:quota"] = 34359738368ULL;
+  p["storage:usageBase"] = 24576000ULL;
+
   // performance.memory: the JS heap limit Chrome reports on the phone.
   p["performance.memory.jsHeapSizeLimit"] = 2147483648ULL;
 

@@ -608,3 +608,20 @@ too) and reproducible: twice from one canvas, across canvases, as
 
 - `additions/camoucfg/DeviceProfiles.cpp`: L353-359
 - `tests/patches/android-canvas-exact.py`: new file, L1-91
+
+## Task 27 - Storage estimate
+
+`navigator.storage.estimate()`, in windows and workers, reports the phone's:
+`quota` 34359738368 (`storage:quota`), `usage` a baseline of 24576000
+(`storage:usageBase`) plus what the origin really stores -- so writing data
+still moves it -- and Chrome's `usageDetails` breakdown (a new
+`StorageEstimate` member, set only on the profile), which sums to `usage`.
+
+- `patches/android/android-27-storage.patch` (patch; lines in the patched source tree):
+  - `dom/quota/StorageManager.cpp`: L7-10, L484-500
+  - `dom/quota/moz.build`: L195-197
+  - `dom/webidl/StorageManager.webidl`: L25-27
+- `additions/camoucfg/DeviceProfiles.cpp`: L277-281
+- `settings/camoucfg.jvv`: L395-397
+- `settings/properties.json`: L170-172
+- `tests/patches/android-storage.py`: new file, L1-93

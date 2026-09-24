@@ -1,0 +1,64 @@
+diff --git a/dom/quota/StorageManager.cpp b/dom/quota/StorageManager.cpp
+index 918c493646..14cc940013 100644
+--- a/dom/quota/StorageManager.cpp
++++ b/dom/quota/StorageManager.cpp
+@@ -4,6 +4,10 @@
+ 
+ #include "StorageManager.h"
+ 
++#include <algorithm>
++
++#include "MaskConfig.hpp"
++
+ #include <cstdint>
+ #include <cstdlib>
+ 
+@@ -477,6 +481,23 @@ nsresult RequestResolver::GetStorageEstimate(nsIVariant* aResult) {
+   MOZ_ALWAYS_SUCCEEDS(
+       estimateResult->GetLimit(&mStorageEstimate.mQuota.Construct()));
+ 
++  // Camoufox: the emulated device's storage. The quota is the device's
++  // ("storage:quota"); usage is a baseline ("storage:usageBase") plus what the
++  // origin really stores, so writing data still moves it. Chrome also reports
++  // a per-type breakdown; Gecko keeps none, so it all counts as IndexedDB.
++  if (auto quota = MaskConfig::GetUint64("storage:quota")) {
++    const uint64_t usage =
++        MaskConfig::GetUint64("storage:usageBase").value_or(0) +
++        mStorageEstimate.mUsage.Value();
++    mStorageEstimate.mUsage.Value() = usage;
++    mStorageEstimate.mQuota.Value() = std::max(*quota, usage);
++    auto& details = mStorageEstimate.mUsageDetails.Construct();
++    if (auto* entry = details.Entries().AppendElement(fallible)) {
++      entry->mKey.AssignLiteral(u"indexedDB");
++      entry->mValue = usage;
++    }
++  }
++
+   return NS_OK;
+ }
+ 
+diff --git a/dom/quota/moz.build b/dom/quota/moz.build
+index 9192b1c522..d2161ea626 100644
+--- a/dom/quota/moz.build
++++ b/dom/quota/moz.build
+@@ -192,3 +192,6 @@ LOCAL_INCLUDES += [
+     "/caps",
+     "/dom/fs/include",
+ ]
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
+diff --git a/dom/webidl/StorageManager.webidl b/dom/webidl/StorageManager.webidl
+index 6c518cea8c..76bd611a3f 100644
+--- a/dom/webidl/StorageManager.webidl
++++ b/dom/webidl/StorageManager.webidl
+@@ -22,6 +22,9 @@ interface StorageManager {
+ dictionary StorageEstimate {
+   unsigned long long usage;
+   unsigned long long quota;
++  // Camoufox: Chrome's per-storage-type breakdown, reported on the Android
++  // device profiles only (absent otherwise).
++  record<DOMString, unsigned long long> usageDetails;
+ };
+ 
+ [SecureContext]
