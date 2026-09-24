@@ -122,10 +122,10 @@ index 0000000000..0abc96d3ed
 +}  // namespace mozilla::dom
 diff --git a/dom/base/ContactsManager.h b/dom/base/ContactsManager.h
 new file mode 100644
-index 0000000000..ff0f807b7e
+index 0000000000..3af675d529
 --- /dev/null
 +++ b/dom/base/ContactsManager.h
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,83 @@
 +/* Camoufox: the Contact Picker API (navigator.contacts) for an emulated
 + * Android device.
 + *
@@ -135,6 +135,7 @@ index 0000000000..ff0f807b7e
 +#ifndef mozilla_dom_ContactsManager_h
 +#define mozilla_dom_ContactsManager_h
 +
++#include "mozilla/dom/AndroidDevice.h"
 +#include "mozilla/dom/BindingDeclarations.h"
 +#include "nsCOMPtr.h"
 +#include "nsCycleCollectionParticipant.h"
@@ -210,10 +211,10 @@ index 0000000000..ff0f807b7e
 +#endif  // mozilla_dom_ContactsManager_h
 diff --git a/dom/base/NDEFReader.cpp b/dom/base/NDEFReader.cpp
 new file mode 100644
-index 0000000000..4b12bfe95d
+index 0000000000..4878fe35fe
 --- /dev/null
 +++ b/dom/base/NDEFReader.cpp
-@@ -0,0 +1,345 @@
+@@ -0,0 +1,346 @@
 +/* Camoufox: Web NFC for an emulated Android device. See NDEFReader.h. */
 +#include "mozilla/dom/NDEFReader.h"
 +
@@ -441,7 +442,8 @@ index 0000000000..4b12bfe95d
 +    aRv.Throw(NS_ERROR_FAILURE);
 +    return nullptr;
 +  }
-+  return MakeAndAddRef<NDEFReader>(global);
++  RefPtr<NDEFReader> reader = new NDEFReader(global);
++  return reader.forget();
 +}
 +
 +JSObject* NDEFReader::WrapObject(JSContext* aCx,
@@ -481,14 +483,14 @@ index 0000000000..4b12bfe95d
 +
 +already_AddRefed<Promise> NDEFReader::Refuse(AbortSignal* aSignal,
 +                                             ErrorResult& aRv) {
-+  RefPtr<Promise> promise = Promise::Create(GetOwnerGlobal(), aRv);
++  RefPtr<Promise> promise = Promise::Create(GetRelevantGlobal(), aRv);
 +  if (aRv.Failed()) {
 +    return nullptr;
 +  }
 +  // An already-aborted signal wins, as in Chrome.
 +  if (aSignal && aSignal->Aborted()) {
 +    AutoJSAPI jsapi;
-+    if (jsapi.Init(GetOwnerGlobal())) {
++    if (jsapi.Init(GetRelevantGlobal())) {
 +      JS::Rooted<JS::Value> reason(jsapi.cx());
 +      aSignal->GetReason(jsapi.cx(), &reason);
 +      promise->MaybeReject(reason);
@@ -502,7 +504,7 @@ index 0000000000..4b12bfe95d
 +already_AddRefed<Promise> NDEFReader::Scan(const NDEFScanOptions& aOptions,
 +                                           ErrorResult& aRv) {
 +  return Refuse(
-+      aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get() : nullptr,
++      aOptions.mSignal.WasPassed() ? &aOptions.mSignal.Value() : nullptr,
 +      aRv);
 +}
 +
@@ -510,14 +512,14 @@ index 0000000000..4b12bfe95d
 +    JSContext* aCx,
 +    const StringOrArrayBufferViewOrArrayBufferOrNDEFMessageInit& aMessage,
 +    const NDEFWriteOptions& aOptions, ErrorResult& aRv) {
-+  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
++  return Refuse(aOptions.mSignal.WasPassed() ? &aOptions.mSignal.Value()
 +                                             : nullptr,
 +                aRv);
 +}
 +
 +already_AddRefed<Promise> NDEFReader::MakeReadOnly(
 +    const NDEFMakeReadOnlyOptions& aOptions, ErrorResult& aRv) {
-+  return Refuse(aOptions.mSignal.WasPassed() ? aOptions.mSignal.Value().get()
++  return Refuse(aOptions.mSignal.WasPassed() ? &aOptions.mSignal.Value()
 +                                             : nullptr,
 +                aRv);
 +}
@@ -547,8 +549,8 @@ index 0000000000..4b12bfe95d
 +  event->InitEvent(aType, aInit.mBubbles, aInit.mCancelable);
 +  event->SetTrusted(trusted);
 +  event->SetComposed(aInit.mComposed);
-+  if (!aInit.mSerialNumber.IsNull()) {
-+    event->mSerialNumber = aInit.mSerialNumber.Value();
++  if (!aInit.mSerialNumber.IsVoid()) {
++    event->mSerialNumber = aInit.mSerialNumber;
 +  }
 +  event->mMessage =
 +      NDEFMessage::Create(global, aGlobal.Context(), aInit.mMessage, aRv);
@@ -561,10 +563,10 @@ index 0000000000..4b12bfe95d
 +}  // namespace mozilla::dom
 diff --git a/dom/base/NDEFReader.h b/dom/base/NDEFReader.h
 new file mode 100644
-index 0000000000..3f3f162054
+index 0000000000..6cb4af9aa2
 --- /dev/null
 +++ b/dom/base/NDEFReader.h
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,167 @@
 +/* Camoufox: Web NFC (NDEFReader, NDEFMessage, NDEFRecord, NDEFReadingEvent)
 + * for an emulated Android device.
 + *
@@ -577,6 +579,7 @@ index 0000000000..3f3f162054
 +#define mozilla_dom_NDEFReader_h
 +
 +#include "mozilla/DOMEventTargetHelper.h"
++#include "mozilla/dom/AndroidDevice.h"
 +#include "mozilla/dom/BindingDeclarations.h"
 +#include "mozilla/dom/Event.h"
 +#include "nsCOMPtr.h"
@@ -589,6 +592,7 @@ index 0000000000..3f3f162054
 +
 +namespace dom {
 +
++class AbortSignal;
 +class Promise;
 +struct NDEFMessageInit;
 +struct NDEFRecordInit;

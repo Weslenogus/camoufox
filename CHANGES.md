@@ -145,9 +145,9 @@ Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
   - `dom/base/AndroidDevice.cpp`: L26-28
   - `dom/base/AndroidDevice.h`: L27-29
   - `dom/base/ContactsManager.cpp`: L1-90
-  - `dom/base/ContactsManager.h`: L1-82
-  - `dom/base/NDEFReader.cpp`: L1-345
-  - `dom/base/NDEFReader.h`: L1-165
+  - `dom/base/ContactsManager.h`: L1-83
+  - `dom/base/NDEFReader.cpp`: L1-346
+  - `dom/base/NDEFReader.h`: L1-167
   - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2390-2396
   - `dom/base/Navigator.h`: L89, L237-238, L320
   - `dom/base/moz.build`: L566-572, L575-576
