@@ -105,3 +105,25 @@ values written in `CAMOU_CONFIG`.
 - `settings/camoucfg.jvv`: L37-38
 - `settings/properties.json`: L15-16
 - `tests/patches/android-navigator.py`: new file, L1-179
+
+## Task 3 - Desktop-only APIs removed
+
+Chrome on Android has none of EyeDropper, WebHID, `getScreenDetails`,
+Document Picture-in-Picture, `queryLocalFonts`, Window Controls Overlay, the
+File System Access pickers or `navigator.keyboard`. Firefox implements only
+Document Picture-in-Picture among them, behind `dom.documentpip.enabled`. A
+new `device:prefs` key (an object of pref name to bool/int/string, set by the
+profile) is applied to the default pref branch right after `camoufox.cfg`, so
+the device's platform defaults win over the desktop ones while user prefs
+(prefs.js, Playwright's `firefox_user_prefs`) still override them; content
+processes inherit them from the parent. The guard pins that the other APIs
+stay absent. SharedWorker is deliberately kept: Chrome ships it on Android
+since M148.
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L40-47
+- `patches/android/android-03-desktop-apis.patch` (patch; lines in the patched source tree):
+  - `modules/libpref/Preferences.cpp`: L12-13, L4177-4212, L4217
+  - `modules/libpref/moz.build`: L186-188
+- `settings/camoucfg.jvv`: L318-321
+- `settings/properties.json`: L118
+- `tests/patches/android-desktop-apis.py`: new file, L1-82

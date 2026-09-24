@@ -315,5 +315,9 @@
 
     "device:profile": "str[pixel10]",
     "device:android": "bool",
+    "device:prefs": "@DEVICE_PREFS",
+    "@DEVICE_PREFS": {
+        "/^[\\w.\\-]+$/": "bool | int | str"
+    },
     "cpu:armDefaultNaN": "bool"
 }

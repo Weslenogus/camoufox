@@ -37,6 +37,14 @@ static nlohmann::json Pixel10() {
   p["navigator.maxTouchPoints"] = 5;
   p["navigator.vendor"] = "Google Inc.";
 
+  // Platform defaults that Gecko keys on prefs. Chrome on Android has no
+  // Document Picture-in-Picture (the rest of the desktop-only APIs --
+  // EyeDropper, WebHID, Window Management, Local Font Access, Window Controls
+  // Overlay, File System Access pickers, Keyboard Map -- Firefox never had).
+  p["device:prefs"] = {
+      {"dom.documentpip.enabled", false},
+  };
+
   return p;
 }
 

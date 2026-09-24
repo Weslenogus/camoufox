@@ -115,5 +115,6 @@
 
   { "property": "device:profile", "type": "str" },
   { "property": "device:android", "type": "bool" },
+  { "property": "device:prefs", "type": "dict" },
   { "property": "cpu:armDefaultNaN", "type": "bool" }
 ]
