@@ -151,6 +151,12 @@ static nlohmann::json Pixel10() {
        {"exposureMode", {"continuous", "manual"}}},
   });
 
+  // Battery: 78%, on battery, four hours left (chargingTime is then
+  // Infinity, as the Battery Status API specifies).
+  p["battery:level"] = 0.78;
+  p["battery:charging"] = false;
+  p["battery:dischargingTime"] = 14400.0;
+
   // Platform defaults that Gecko keys on prefs. Chrome on Android has no
   // Document Picture-in-Picture (the rest of the desktop-only APIs --
   // EyeDropper, WebHID, Window Management, Local Font Access, Window Controls

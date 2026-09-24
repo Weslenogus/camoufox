@@ -292,3 +292,19 @@ Captures stream synthetic frames and tone -- never the host's devices -- and
 - `settings/camoucfg.jvv`: L349-365
 - `settings/properties.json`: L142-143
 - `tests/patches/android-media-devices.py`: new file, L1-136
+
+## Task 10 - Battery Status API
+
+Firefox keeps the Battery Status API for its own UI (ChromeOnly); Chrome on
+Android exposes `navigator.getBattery()` and `BatteryManager` to secure pages.
+The profile exposes them (gate `AndroidDevice::HasBatteryAPI`, secure contexts
+only) and reports level 0.78, charging false, chargingTime Infinity,
+dischargingTime 14400, through the existing `battery:*` keys.
+
+- `patches/android/android-10-battery.patch` (patch; lines in the patched source tree):
+  - `dom/base/AndroidDevice.cpp`: L6-7, L31-40
+  - `dom/base/AndroidDevice.h`: L30-32
+  - `dom/webidl/BatteryManager.webidl`: L12-15
+  - `dom/webidl/Navigator.webidl`: L137-140
+- `additions/camoucfg/DeviceProfiles.cpp`: L154-159
+- `tests/patches/android-battery.py`: new file, L1-51
