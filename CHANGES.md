@@ -95,7 +95,7 @@ values written in `CAMOU_CONFIG`.
 - `patches/android/android-02-navigator.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L1-26
   - `dom/base/AndroidDevice.h`: L1-31
-  - `dom/base/Navigator.cpp`: L9, L564-571, L774-778
+  - `dom/base/Navigator.cpp`: L9, L564-571, L580-584, L779-783
   - `dom/base/Navigator.h`: L180
   - `dom/base/moz.build`: L562-569
   - `dom/webidl/Navigator.webidl`: L310-318
@@ -148,7 +148,7 @@ Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
   - `dom/base/ContactsManager.h`: L1-83
   - `dom/base/NDEFReader.cpp`: L1-346
   - `dom/base/NDEFReader.h`: L1-167
-  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2390-2396
+  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2395-2401
   - `dom/base/Navigator.h`: L89, L237-238, L320
   - `dom/base/moz.build`: L566-572, L575-576
   - `dom/base/nsGlobalWindowInner.h`: L600-615
@@ -175,7 +175,7 @@ full-version-list) are gated by `clientHints:sendHighEntropy`, which the
 profile sets. Without `userAgentData:brands` there are no client hints at all.
 
 - `patches/android/android-05-client-hints.patch` (patch; lines in the patched source tree):
-  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L782-789
+  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L787-794
   - `dom/base/Navigator.h`: L45, L183, L332
   - `dom/base/NavigatorUAData.cpp`: L1-119
   - `dom/base/NavigatorUAData.h`: L1-54
@@ -646,3 +646,13 @@ keys. OfflineAudioContext keeps the rate it is given.
 - `settings/camoucfg.jvv`: L397-398
 - `settings/properties.json`: L172-173
 - `tests/patches/android-media-timing.py`: new file, L1-59
+
+## Fixes after the first build of all tasks together
+
+Tasks 0-28 were first compiled and tested together after they were merged. The fixes are follow-up commits, one per task (see the git log). Patches: each task's section above already points into the current patch. Other files, with the lines those fixes changed, as the files are now:
+
+- `tests/patches/android-api-stubs.py`: L13-16, L62, L87, L101-108, L110-112, L114-118
+- `tests/patches/android-canvas-exact.py`: L56-61, L63, L66, L68, L70
+- `tests/patches/android-canvas-text.py`: L10-13, L68
+- `tests/patches/android-client-hints.py`: L63, L76-77, L80-81, L83
+- `tests/patches/android-media-capabilities.py`: L28, L39, L41, L44-45, L47

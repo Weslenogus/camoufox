@@ -735,7 +735,7 @@ index 0000000000..6cb4af9aa2
 +
 +#endif  // mozilla_dom_NDEFReader_h
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index 6001101692..798f3264aa 100644
+index c072080127..ba63b118e6 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -7,6 +7,7 @@
@@ -763,7 +763,7 @@ index 6001101692..798f3264aa 100644
    if (mMediaSession) {
      mMediaSession->Shutdown();
      mMediaSession = nullptr;
-@@ -2383,6 +2387,13 @@ dom::MediaCapabilities* Navigator::MediaCapabilities() {
+@@ -2388,6 +2392,13 @@ dom::MediaCapabilities* Navigator::MediaCapabilities() {
    return mMediaCapabilities;
  }
  
