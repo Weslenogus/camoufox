@@ -169,5 +169,6 @@
   { "property": "navigator.connection.saveData", "type": "bool" },
   { "property": "performance.memory.jsHeapSizeLimit", "type": "uint" },
   { "property": "storage:quota", "type": "uint" },
-  { "property": "storage:usageBase", "type": "uint" }
+  { "property": "storage:usageBase", "type": "uint" },
+  { "property": "AudioContext:baseLatency", "type": "double" }
 ]

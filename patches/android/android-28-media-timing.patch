@@ -1,0 +1,39 @@
+diff --git a/dom/media/webaudio/AudioContext.cpp b/dom/media/webaudio/AudioContext.cpp
+index e3e86872fa..5043009ed1 100644
+--- a/dom/media/webaudio/AudioContext.cpp
++++ b/dom/media/webaudio/AudioContext.cpp
+@@ -549,6 +549,13 @@ AudioListener* AudioContext::Listener() {
+   return mListener;
+ }
+ 
++double AudioContext::BaseLatency() const {
++  if (auto value = MaskConfig::GetDouble("AudioContext:baseLatency")) {
++    return value.value();
++  }
++  return 0.0;
++}
++
+ double AudioContext::OutputLatency() {
+   if (mIsShutDown) {
+     return 0.0;
+diff --git a/dom/media/webaudio/AudioContext.h b/dom/media/webaudio/AudioContext.h
+index e3c04c4b83..ce9a0d45bd 100644
+--- a/dom/media/webaudio/AudioContext.h
++++ b/dom/media/webaudio/AudioContext.h
+@@ -189,11 +189,11 @@ class AudioContext final : public DOMEventTargetHelper,
+ 
+   AudioContextState State() const { return mAudioContextState; }
+ 
+-  double BaseLatency() const {
+-    // Gecko does not do any buffering between rendering the audio and sending
+-    // it to the audio subsystem.
+-    return 0.0;
+-  }
++  // Gecko does not do any buffering between rendering the audio and sending
++  // it to the audio subsystem, so this is 0 -- unless the emulated device's
++  // is configured ("AudioContext:baseLatency"; Chrome reports its render
++  // quantum buffering there, 256 frames at 48 kHz on the phone).
++  double BaseLatency() const;
+ 
+   double OutputLatency();
+ 

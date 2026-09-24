@@ -274,6 +274,13 @@ static nlohmann::json Pixel10() {
   p["mediaCapabilities:maxHeight"] = 1080;
   p["mediaCapabilities:maxFramerate"] = 30;
 
+  // Web Audio at the phone's 48 kHz, with Chrome on Android's latencies:
+  // 256 frames of base latency, 1024 of output latency.
+  p["AudioContext:sampleRate"] = 48000;
+  p["AudioContext:baseLatency"] = 0.005333;
+  p["AudioContext:outputLatency"] = 0.021333;
+  p["AudioContext:maxChannelCount"] = 2;
+
   // navigator.storage.estimate(): the quota Chrome grants an origin on the
   // phone, and a fresh origin's baseline usage.
   p["storage:quota"] = 34359738368ULL;
@@ -362,6 +369,8 @@ static nlohmann::json Pixel10() {
       {"privacy.fingerprintingProtection.pbmode", false},
       {"privacy.fingerprintingProtection.remoteOverrides.enabled", false},
       {"privacy.resistFingerprinting.pbmode", false},
+      // HTMLVideoElement.requestVideoFrameCallback, native.
+      {"media.rvfc.enabled", true},
       // NetworkInformation (navigator.connection), in windows and workers.
       {"dom.netinfo.enabled", true},
       {"dom.webgpu.enabled", true},

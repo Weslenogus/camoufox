@@ -625,3 +625,20 @@ still moves it -- and Chrome's `usageDetails` breakdown (a new
 - `settings/camoucfg.jvv`: L395-397
 - `settings/properties.json`: L170-172
 - `tests/patches/android-storage.py`: new file, L1-93
+
+## Task 28 - requestVideoFrameCallback and AudioContext timing
+
+`HTMLVideoElement.requestVideoFrameCallback` / `cancelVideoFrameCallback` are
+Gecko's own native implementation, pinned on through `device:prefs`
+(`media.rvfc.enabled`). `AudioContext` runs at 48000 Hz with Chrome on the
+phone's latencies: `baseLatency` 0.005333 (new `AudioContext:baseLatency`; Gecko
+otherwise always reports 0) and `outputLatency` 0.021333 through the existing
+keys. OfflineAudioContext keeps the rate it is given.
+
+- `patches/android/android-28-media-timing.patch` (patch; lines in the patched source tree):
+  - `dom/media/webaudio/AudioContext.cpp`: L552-558
+  - `dom/media/webaudio/AudioContext.h`: L192-196
+- `additions/camoucfg/DeviceProfiles.cpp`: L277-283, L372-373
+- `settings/camoucfg.jvv`: L397-398
+- `settings/properties.json`: L172-173
+- `tests/patches/android-media-timing.py`: new file, L1-59

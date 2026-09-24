@@ -394,5 +394,6 @@
     "navigator.connection.saveData": "bool",
     "performance.memory.jsHeapSizeLimit": "int[>0]",
     "storage:quota": "int[>0]",
-    "storage:usageBase": "int[>=0]"
+    "storage:usageBase": "int[>=0]",
+    "AudioContext:baseLatency": "double[>=0]"
 }
