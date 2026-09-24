@@ -190,3 +190,26 @@ profile sets. Without `userAgentData:brands` there are no client hints at all.
 - `settings/camoucfg.jvv`: L322-338
 - `settings/properties.json`: L119-131
 - `tests/patches/android-client-hints.py`: new file, L1-160
+
+## Task 6 - Synthetic device motion and orientation
+
+A desktop has no motion sensors, so the profile gets a synthetic 60 Hz
+source (interval 16 ms, as Chrome on Android) behind `devicemotion`,
+`deviceorientation` and `deviceorientationabsolute`: a phone held still-ish,
+at a per-session tilt with beta in [0, 5] and gamma in [0, 2] degrees
+(`sensors:betaRange`/`gammaRange`) and a random heading, plus gaussian hand
+tremor (sigma 0.15 degrees, `sensors:tremorSigma`). Gravity is derived from
+that tilt, so `accelerationIncludingGravity` and the orientation agree the way
+a real device's do; acceleration noise sigma 0.08 m/s^2
+(`sensors:accelSigma`), rotation-rate noise 0.3 deg/s (`sensors:gyroSigma`).
+Values are rounded as Chromium rounds them before they reach a page
+(acceleration and Euler angles to 0.1; rotation rate to 0.1 degree in
+radians). The timer runs only while a page listens.
+
+- `patches/android/android-06-sensors.patch` (patch; lines in the patched source tree):
+  - `dom/system/moz.build`: L85-87
+  - `dom/system/nsDeviceSensors.cpp`: L9-13, L110-112, L114-116, L165-170, L191-195, L582-845
+  - `dom/system/nsDeviceSensors.h`: L10, L18-19, L66-75
+- `settings/camoucfg.jvv`: L338-343
+- `settings/properties.json`: L131-136
+- `tests/patches/android-sensors.py`: new file, L1-144

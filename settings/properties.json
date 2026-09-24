@@ -128,5 +128,10 @@
   { "property": "userAgentData:bitness", "type": "str" },
   { "property": "userAgentData:wow64", "type": "bool" },
   { "property": "userAgentData:formFactors", "type": "array" },
-  { "property": "clientHints:sendHighEntropy", "type": "bool" }
+  { "property": "clientHints:sendHighEntropy", "type": "bool" },
+  { "property": "sensors:betaRange", "type": "array" },
+  { "property": "sensors:gammaRange", "type": "array" },
+  { "property": "sensors:tremorSigma", "type": "double" },
+  { "property": "sensors:accelSigma", "type": "double" },
+  { "property": "sensors:gyroSigma", "type": "double" }
 ]

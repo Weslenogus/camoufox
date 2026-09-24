@@ -335,5 +335,10 @@
     "@UA_BRAND": {
         "*brand": "str",
         "*version": "str"
-    }
+    },
+    "sensors:betaRange": "array[double, 2]",
+    "sensors:gammaRange": "array[double, 2]",
+    "sensors:tremorSigma": "double[>=0]",
+    "sensors:accelSigma": "double[>=0]",
+    "sensors:gyroSigma": "double[>=0]"
 }
