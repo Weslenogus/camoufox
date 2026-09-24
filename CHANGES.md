@@ -414,3 +414,20 @@ through the new `js/AutomationFrames.h`.
 - `settings/camoucfg.jvv`: L371-372
 - `settings/properties.json`: L149-150
 - `tests/patches/android-automation.py`: new file, L1-89
+
+## Task 16 - MediaCapabilities
+
+`navigator.mediaCapabilities.decodingInfo()`/`encodingInfo()` report what a
+phone's hardware codecs do: H.264, VP9 and AV1 up to 1920x1080 at 30 fps are
+supported, smooth and powerEfficient (`mediaCapabilities:maxWidth`,
+`maxHeight`, `maxFramerate`), where a software-decoding desktop reports
+powerEfficient false. Larger or faster configurations and other codecs keep
+Gecko's own answer.
+
+- `patches/android/android-16-media-capabilities.patch` (patch; lines in the patched source tree):
+  - `dom/media/mediacapabilities/MediaCapabilities.cpp`: L7-8, L711-762, L803-809
+  - `dom/media/mediacapabilities/moz.build`: L17-19
+- `additions/camoucfg/DeviceProfiles.cpp`: L197-202
+- `settings/camoucfg.jvv`: L372-375
+- `settings/properties.json`: L150-153
+- `tests/patches/android-media-capabilities.py`: new file, L1-80

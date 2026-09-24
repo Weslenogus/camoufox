@@ -369,5 +369,8 @@
     "screen.safeAreaInsetBottom": "double[>=0]",
     "screen.safeAreaInsetLeft": "double[>=0]",
     "screen.safeAreaInsetRight": "double[>=0]",
-    "automation:hideStackFrames": "bool"
+    "automation:hideStackFrames": "bool",
+    "mediaCapabilities:maxWidth": "int[>0]",
+    "mediaCapabilities:maxHeight": "int[>0]",
+    "mediaCapabilities:maxFramerate": "double[>0]"
 }

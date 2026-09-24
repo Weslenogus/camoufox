@@ -194,6 +194,12 @@ static nlohmann::json Pixel10() {
   p["screen.safeAreaInsetLeft"] = 0;
   p["screen.safeAreaInsetRight"] = 0;
 
+  // Hardware video decode (H.264, VP9, AV1) is smooth and power efficient up
+  // to 1080p30 on Tensor G5.
+  p["mediaCapabilities:maxWidth"] = 1920;
+  p["mediaCapabilities:maxHeight"] = 1080;
+  p["mediaCapabilities:maxFramerate"] = 30;
+
   // Battery: 78%, on battery, four hours left (chargingTime is then
   // Infinity, as the Battery Status API specifies).
   p["battery:level"] = 0.78;

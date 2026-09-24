@@ -147,5 +147,8 @@
   { "property": "screen.safeAreaInsetBottom", "type": "double" },
   { "property": "screen.safeAreaInsetLeft", "type": "double" },
   { "property": "screen.safeAreaInsetRight", "type": "double" },
-  { "property": "automation:hideStackFrames", "type": "bool" }
+  { "property": "automation:hideStackFrames", "type": "bool" },
+  { "property": "mediaCapabilities:maxWidth", "type": "uint" },
+  { "property": "mediaCapabilities:maxHeight", "type": "uint" },
+  { "property": "mediaCapabilities:maxFramerate", "type": "double" }
 ]

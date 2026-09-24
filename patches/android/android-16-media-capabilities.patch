@@ -1,0 +1,97 @@
+diff --git a/dom/media/mediacapabilities/MediaCapabilities.cpp b/dom/media/mediacapabilities/MediaCapabilities.cpp
+index 5a44fe33f8..90f3c14d4d 100644
+--- a/dom/media/mediacapabilities/MediaCapabilities.cpp
++++ b/dom/media/mediacapabilities/MediaCapabilities.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "MediaCapabilities.h"
+ 
++#include "MaskConfig.hpp"
++
+ #include <utility>
+ 
+ #include "AllocationPolicy.h"
+@@ -706,6 +708,58 @@ already_AddRefed<Promise> MediaCapabilities::DecodingInfo(
+   return promise.forget();
+ }
+ 
++// Camoufox: the hardware video decoder of an emulated Android device.
++//
++// A phone decodes H.264, VP9 and AV1 in a dedicated block; the host this runs
++// on may have no decoder for some of them at all (a container without FFmpeg
++// has no H.264) and decodes the rest in software. For those codecs the answer
++// is therefore the device's, not the host's: supported, and smooth and
++// power-efficient inside the decoder's envelope ("mediaCapabilities:maxWidth",
++// "...:maxHeight", "...:maxFramerate"). Anything else -- other codecs, invalid
++// container/codec pairs -- is left to Gecko.
++static Maybe<MediaCapabilitiesDecodingInfo> AndroidHardwareDecodingInfo(
++    const MediaDecodingConfiguration& aConfiguration,
++    CodecSupport aAudioSupported) {
++  if (!MaskConfig::IsAndroidDevice() || !aConfiguration.mVideo.WasPassed() ||
++      aAudioSupported == CodecSupport::Unsupported) {
++    return Nothing();
++  }
++  const VideoConfiguration& video = aConfiguration.mVideo.Value();
++  const Maybe<MediaExtendedMIMEType> mime =
++      MakeMediaExtendedMIMEType(video.mContentType);
++  if (!mime) {
++    return Nothing();
++  }
++
++  const MediaCodecs& codecs = mime->Codecs();
++  const bool mp4 = mime->Type() == "video/mp4"_ns;
++  const bool webm = mime->Type() == "video/webm"_ns;
++  const bool h264 = codecs.ContainsPrefix(u"avc1"_ns) ||
++                    codecs.ContainsPrefix(u"avc3"_ns);
++  const bool vp9 =
++      codecs.ContainsPrefix(u"vp09"_ns) || codecs.ContainsPrefix(u"vp9"_ns);
++  const bool av1 = codecs.ContainsPrefix(u"av01"_ns);
++  if (!((mp4 && (h264 || vp9 || av1)) || (webm && (vp9 || av1)))) {
++    return Nothing();
++  }
++
++  const uint32_t maxWidth =
++      MaskConfig::GetUint32("mediaCapabilities:maxWidth").value_or(1920);
++  const uint32_t maxHeight =
++      MaskConfig::GetUint32("mediaCapabilities:maxHeight").value_or(1080);
++  const double maxFramerate =
++      MaskConfig::GetDouble("mediaCapabilities:maxFramerate").value_or(30.0);
++  const bool inEnvelope = video.mWidth <= maxWidth &&
++                          video.mHeight <= maxHeight &&
++                          video.mFramerate <= maxFramerate;
++
++  MediaCapabilitiesDecodingInfo info;
++  info.mSupported = true;
++  info.mSmooth = inEnvelope;
++  info.mPowerEfficient = inEnvelope;
++  return Some(std::move(info));
++}
++
+ // https://w3c.github.io/media-capabilities/#create-media-capabilities-decoding-info
+ void MediaCapabilities::CreateMediaCapabilitiesDecodingInfo(
+     const MediaDecodingConfiguration& aConfiguration, ErrorResult& aRv,
+@@ -746,6 +800,13 @@ void MediaCapabilities::CreateMediaCapabilitiesDecodingInfo(
+       audioContainer = Some(MediaContainerType(std::move(*audioMime)));
+     }
+   }
++  // Camoufox: see AndroidHardwareDecodingInfo().
++  if (auto info = AndroidHardwareDecodingInfo(aConfiguration, audioSupported)) {
++    LOG("Android hardware decoder: {}", *info);
++    aPromise->MaybeResolve(std::move(*info));
++    return;
++  }
++
+   const bool bothSupportUnknown = videoSupported == CodecSupport::Unknown &&
+                                   audioSupported == CodecSupport::Unknown;
+ 
+diff --git a/dom/media/mediacapabilities/moz.build b/dom/media/mediacapabilities/moz.build
+index 786b87a910..74e3855f1a 100644
+--- a/dom/media/mediacapabilities/moz.build
++++ b/dom/media/mediacapabilities/moz.build
+@@ -14,3 +14,6 @@ UNIFIED_SOURCES += [
+ include("/ipc/chromium/chromium-config.mozbuild")
+ 
+ FINAL_LIBRARY = "xul"
++
++# DOM Mask
++LOCAL_INCLUDES += ["/camoucfg"]
