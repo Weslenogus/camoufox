@@ -1,0 +1,163 @@
+diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
+index 54b5638d19..a9f1fb2464 100644
+--- a/dom/canvas/ClientWebGLContext.cpp
++++ b/dom/canvas/ClientWebGLContext.cpp
+@@ -6199,6 +6199,14 @@ void ClientWebGLContext::GetSupportedProfilesASTC(
+   const auto& limits = Limits();
+ 
+   auto& retarr = retval.SetValue();
++  // Camoufox: report the emulated GPU's ASTC profiles.
++  if (auto profiles = MaskConfig::GetStringList("webGl:astcProfiles");
++      !profiles.empty()) {
++    for (const auto& profile : profiles) {
++      retarr.AppendElement(NS_ConvertUTF8toUTF16(profile));
++    }
++    return;
++  }
+   retarr.AppendElement(u"ldr"_ns);
+   if (limits.astcHdr) {
+     retarr.AppendElement(u"hdr"_ns);
+diff --git a/dom/canvas/WebGLAstcEmulation.h b/dom/canvas/WebGLAstcEmulation.h
+new file mode 100644
+index 0000000000..06fb6247a5
+--- /dev/null
++++ b/dom/canvas/WebGLAstcEmulation.h
+@@ -0,0 +1,49 @@
++/* Camoufox: WEBGL_compressed_texture_astc on a GPU without ASTC.
++ *
++ * Every mobile GPU exposes ASTC and desktop GPUs mostly do not, so a phone
++ * profile has to offer the extension on hardware that cannot decode it. When
++ * "webGl:emulateAstc" is set and the driver lacks KHR_texture_compression_astc
++ * the extension is still offered, its formats pass WebGL's own validation
++ * (block sizes, data sizes, sub-image rules) exactly as on an ASTC GPU, and the
++ * image is allocated uncompressed at the same size underneath. The texels are
++ * not decoded -- the texture samples as transparent black -- but every call a
++ * page can make succeeds or fails the way it would on the phone.
++ *
++ * A GPU with real ASTC support is always used as is. */
++#ifndef mozilla_webgl_WebGLAstcEmulation_h
++#define mozilla_webgl_WebGLAstcEmulation_h
++
++#include "GLConsts.h"
++#include "GLContext.h"
++#include "MaskConfig.hpp"
++
++namespace mozilla::webgl {
++
++inline bool IsAstcEmulationRequested() {
++  static const bool requested = MaskConfig::CheckBool("webGl:emulateAstc");
++  return requested;
++}
++
++inline bool IsAstcEmulated(gl::GLContext* gl) {
++  return IsAstcEmulationRequested() &&
++         !gl->IsExtensionSupported(
++             gl::GLContext::KHR_texture_compression_astc_ldr);
++}
++
++inline bool IsAstcFormat(GLenum format) {
++  return (format >= LOCAL_GL_COMPRESSED_RGBA_ASTC_4x4_KHR &&
++          format <= LOCAL_GL_COMPRESSED_RGBA_ASTC_12x12_KHR) ||
++         (format >= LOCAL_GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR &&
++          format <= LOCAL_GL_COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR);
++}
++
++// The uncompressed format an emulated ASTC image is allocated as.
++inline GLenum AstcStandInFormat(GLenum format) {
++  return format >= LOCAL_GL_COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR
++             ? LOCAL_GL_SRGB8_ALPHA8
++             : LOCAL_GL_RGBA8;
++}
++
++}  // namespace mozilla::webgl
++
++#endif  // mozilla_webgl_WebGLAstcEmulation_h
+diff --git a/dom/canvas/WebGLExtensions.cpp b/dom/canvas/WebGLExtensions.cpp
+index 0cd6f8726d..261512a659 100644
+--- a/dom/canvas/WebGLExtensions.cpp
++++ b/dom/canvas/WebGLExtensions.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "WebGLExtensions.h"
+ 
++#include "WebGLAstcEmulation.h"
++
+ #include "GLContext.h"
+ #include "WebGLContext.h"
+ #include "WebGLFormats.h"
+@@ -202,8 +204,10 @@ WebGLExtensionCompressedTextureASTC::WebGLExtensionCompressedTextureASTC(
+ bool WebGLExtensionCompressedTextureASTC::IsSupported(
+     const WebGLContext* webgl) {
+   gl::GLContext* gl = webgl->GL();
++  // Camoufox: offered without driver support when emulation is requested.
+   return gl->IsExtensionSupported(
+-      gl::GLContext::KHR_texture_compression_astc_ldr);
++             gl::GLContext::KHR_texture_compression_astc_ldr) ||
++         webgl::IsAstcEmulationRequested();
+ }
+ 
+ // -
+diff --git a/dom/canvas/WebGLTextureUpload.cpp b/dom/canvas/WebGLTextureUpload.cpp
+index d26a00eafc..afd101de37 100644
+--- a/dom/canvas/WebGLTextureUpload.cpp
++++ b/dom/canvas/WebGLTextureUpload.cpp
+@@ -4,6 +4,8 @@
+ 
+ #include "WebGLTextureUpload.h"
+ 
++#include "WebGLAstcEmulation.h"
++
+ #include <algorithm>
+ #include <bit>
+ 
+@@ -579,6 +581,11 @@ static inline GLenum DoTexStorage(gl::GLContext* gl, TexTarget target,
+                                   GLsizei depth) {
+   gl::GLContext::LocalErrorScope errorScope(*gl);
+ 
++  // Camoufox: see WebGLAstcEmulation.h.
++  if (webgl::IsAstcFormat(sizedFormat) && webgl::IsAstcEmulated(gl)) {
++    sizedFormat = webgl::AstcStandInFormat(sizedFormat);
++  }
++
+   switch (target.get()) {
+     case LOCAL_GL_TEXTURE_2D:
+     case LOCAL_GL_TEXTURE_CUBE_MAP:
+@@ -666,6 +673,25 @@ static inline GLenum DoCompressedTexImage(gl::GLContext* gl,
+ 
+   gl::GLContext::LocalErrorScope errorScope(*gl);
+ 
++  // Camoufox: see WebGLAstcEmulation.h. WebGL has already validated the
++  // compressed data; allocate the image uncompressed at the same size. With
++  // no pixel source the unpack buffer must not be read, so unbind it -- it is
++  // bound lazily around this call and unbound after it anyway.
++  if (webgl::IsAstcFormat(internalFormat) && webgl::IsAstcEmulated(gl)) {
++    if (gl->HasPBOState()) {
++      gl->fBindBuffer(LOCAL_GL_PIXEL_UNPACK_BUFFER, 0);
++    }
++    const GLenum standIn = webgl::AstcStandInFormat(internalFormat);
++    if (IsTarget3D(target)) {
++      gl->fTexImage3D(target.get(), level, standIn, width, height, depth,
++                      border, LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, nullptr);
++    } else {
++      gl->fTexImage2D(target.get(), level, standIn, width, height, border,
++                      LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, nullptr);
++    }
++    return errorScope.GetError();
++  }
++
+   if (IsTarget3D(target)) {
+     gl->fCompressedTexImage3D(target.get(), level, internalFormat, width,
+                               height, depth, border, dataSize, data);
+@@ -683,6 +709,12 @@ GLenum DoCompressedTexSubImage(gl::GLContext* gl, TexImageTarget target,
+                                GLint zOffset, GLsizei width, GLsizei height,
+                                GLsizei depth, GLenum sizedUnpackFormat,
+                                GLsizei dataSize, const void* data) {
++  // Camoufox: see WebGLAstcEmulation.h. The stand-in image is not decoded,
++  // so a validated sub-image update has nothing to write.
++  if (webgl::IsAstcFormat(sizedUnpackFormat) && webgl::IsAstcEmulated(gl)) {
++    return LOCAL_GL_NO_ERROR;
++  }
++
+   gl::GLContext::LocalErrorScope errorScope(*gl);
+ 
+   if (IsTarget3D(target)) {

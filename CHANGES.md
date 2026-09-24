@@ -213,3 +213,25 @@ radians). The timer runs only while a page listens.
 - `settings/camoucfg.jvv`: L338-343
 - `settings/properties.json`: L131-136
 - `tests/patches/android-sensors.py`: new file, L1-144
+
+## Task 7 - WebGL: PowerVR identity, extensions, ASTC, fp16 mediump
+
+WebGL as Chrome reports it on the Pixel 10's GPU (the PowerVR D-Series
+DXT-48-1536 in Tensor G5): unmasked vendor/renderer, Chrome's
+VENDOR/RENDERER/VERSION/SHADING_LANGUAGE_VERSION strings, Chrome on Android's
+extension lists (less the few Gecko does not implement), and fp16 mediump
+precision (15/15/10). `WEBGL_compressed_texture_astc` is offered even when
+the host GPU cannot decode ASTC (`webGl:emulateAstc`): the extension, its
+formats in COMPRESSED_TEXTURE_FORMATS, and correctly sized uploads succeed
+(wrong sizes still fail as on hardware), with `getSupportedProfiles()` from
+`webGl:astcProfiles`. S3TC, a desktop format, is not offered.
+
+- `patches/android/android-07-webgl.patch` (patch; lines in the patched source tree):
+  - `dom/canvas/ClientWebGLContext.cpp`: L6202-6209
+  - `dom/canvas/WebGLAstcEmulation.h`: L1-49
+  - `dom/canvas/WebGLExtensions.cpp`: L7-8, L207, L209-210
+  - `dom/canvas/WebGLTextureUpload.cpp`: L7-8, L584-588, L676-694, L712-717
+- `additions/camoucfg/DeviceProfiles.cpp`: L12-13, L68-130
+- `settings/camoucfg.jvv`: L343-345
+- `settings/properties.json`: L136-138
+- `tests/patches/android-webgl.py`: new file, L1-125

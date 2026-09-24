@@ -9,6 +9,8 @@
 
 #include "mozilla/glue/Debug.h"
 
+#include <string>
+
 namespace MaskConfig {
 namespace DeviceProfiles {
 
@@ -62,6 +64,69 @@ static nlohmann::json Pixel10() {
   p["userAgentData:wow64"] = false;
   p["userAgentData:formFactors"] = nlohmann::json::array({"Mobile"});
   p["clientHints:sendHighEntropy"] = true;
+
+  // WebGL as Chrome reports it on the Pixel 10's GPU, the PowerVR D-Series
+  // DXT-48-1536 in Tensor G5. The extension lists are Chrome on Android's,
+  // less the ones Gecko does not implement (a listed extension must be
+  // obtainable). ASTC is emulated where the host GPU lacks it; S3TC, a
+  // desktop format, is not offered. mediump is fp16: 15/15/10.
+  p["webGl:vendor"] = "Imagination Technologies";
+  p["webGl:renderer"] = "PowerVR D-Series DXT-48-1536";
+  p["webGl:emulateAstc"] = true;
+  p["webGl:astcProfiles"] = nlohmann::json::array({"ldr"});
+  p["webGl:supportedExtensions"] = nlohmann::json::array({
+      "ANGLE_instanced_arrays", "EXT_blend_minmax",
+      "EXT_color_buffer_half_float", "EXT_depth_clamp", "EXT_float_blend",
+      "EXT_frag_depth", "EXT_shader_texture_lod", "EXT_sRGB",
+      "EXT_texture_filter_anisotropic", "OES_element_index_uint",
+      "OES_fbo_render_mipmap", "OES_standard_derivatives", "OES_texture_float",
+      "OES_texture_float_linear", "OES_texture_half_float",
+      "OES_texture_half_float_linear", "OES_vertex_array_object",
+      "WEBGL_color_buffer_float", "WEBGL_compressed_texture_astc",
+      "WEBGL_compressed_texture_etc", "WEBGL_compressed_texture_etc1",
+      "WEBGL_debug_renderer_info", "WEBGL_debug_shaders",
+      "WEBGL_depth_texture", "WEBGL_draw_buffers", "WEBGL_lose_context",
+  });
+  p["webGl2:supportedExtensions"] = nlohmann::json::array({
+      "EXT_color_buffer_float", "EXT_color_buffer_half_float",
+      "EXT_depth_clamp", "EXT_float_blend", "EXT_texture_filter_anisotropic",
+      "EXT_texture_norm16", "OES_draw_buffers_indexed",
+      "OES_texture_float_linear", "WEBGL_compressed_texture_astc",
+      "WEBGL_compressed_texture_etc", "WEBGL_compressed_texture_etc1",
+      "WEBGL_debug_renderer_info", "WEBGL_debug_shaders", "WEBGL_lose_context",
+      "WEBGL_provoking_vertex",
+  });
+  {
+    // "shaderType,precisionType": FRAGMENT 35632 / VERTEX 35633 x
+    // LOW/MEDIUM/HIGH_FLOAT 36336-36338, LOW/MEDIUM/HIGH_INT 36339-36341.
+    nlohmann::json formats = nlohmann::json::object();
+    for (const char* shader : {"35632", "35633"}) {
+      auto set = [&](const char* type, int lo, int hi, int precision) {
+        formats[std::string(shader) + "," + type] = {
+            {"rangeMin", lo}, {"rangeMax", hi}, {"precision", precision}};
+      };
+      set("36336", 15, 15, 10);
+      set("36337", 15, 15, 10);
+      set("36338", 127, 127, 23);
+      set("36339", 15, 15, 0);
+      set("36340", 15, 15, 0);
+      set("36341", 31, 30, 0);
+    }
+    p["webGl:shaderPrecisionFormats"] = formats;
+    p["webGl2:shaderPrecisionFormats"] = formats;
+  }
+  p["webGl:parameters"] = {
+      {"7936", "WebKit"},
+      {"7937", "WebKit WebGL"},
+      {"7938", "WebGL 1.0 (OpenGL ES 2.0 Chromium)"},
+      {"35724", "WebGL GLSL ES 1.0 (OpenGL ES GLSL ES 1.0 Chromium)"},
+  };
+  p["webGl2:parameters"] = {
+      {"7936", "WebKit"},
+      {"7937", "WebKit WebGL"},
+      {"7938", "WebGL 2.0 (OpenGL ES 3.0 Chromium)"},
+      {"35724", "WebGL GLSL ES 3.00 (OpenGL ES GLSL ES 3.0 Chromium)"},
+  };
 
   // Platform defaults that Gecko keys on prefs. Chrome on Android has no
   // Document Picture-in-Picture (the rest of the desktop-only APIs --

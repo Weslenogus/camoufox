@@ -133,5 +133,7 @@
   { "property": "sensors:gammaRange", "type": "array" },
   { "property": "sensors:tremorSigma", "type": "double" },
   { "property": "sensors:accelSigma", "type": "double" },
-  { "property": "sensors:gyroSigma", "type": "double" }
+  { "property": "sensors:gyroSigma", "type": "double" },
+  { "property": "webGl:emulateAstc", "type": "bool" },
+  { "property": "webGl:astcProfiles", "type": "array" }
 ]

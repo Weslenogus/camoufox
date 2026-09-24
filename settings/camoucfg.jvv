@@ -340,5 +340,7 @@
     "sensors:gammaRange": "array[double, 2]",
     "sensors:tremorSigma": "double[>=0]",
     "sensors:accelSigma": "double[>=0]",
-    "sensors:gyroSigma": "double[>=0]"
+    "sensors:gyroSigma": "double[>=0]",
+    "webGl:emulateAstc": "bool",
+    "webGl:astcProfiles": "array[str]"
 }
