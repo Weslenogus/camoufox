@@ -73,6 +73,40 @@ GROUPS: Dict[str, Tuple[str, ...]] = {
         "viewport-no-rdm",
         "windows-exe-manifest",
     ),
+    # The Android device profiles ({"device:profile": "pixel10"}): each guard
+    # checks the phone's value and that a launch without the profile is left
+    # as Firefox has it.
+    "android": (
+        "android-api-stubs",
+        "android-arm-nan",
+        "android-automation",
+        "android-battery",
+        "android-camera2",
+        "android-canvas-exact",
+        "android-canvas-text",
+        "android-client-hints",
+        "android-desktop-apis",
+        "android-fetch-metadata",
+        "android-fonts",
+        "android-languages-connection",
+        "android-media-capabilities",
+        "android-media-devices",
+        "android-media-timing",
+        "android-mediump-precision",
+        "android-navigator",
+        "android-network-headers",
+        "android-performance",
+        "android-permissions",
+        "android-screen",
+        "android-sensors",
+        "android-storage",
+        "android-text-aa",
+        "android-touch",
+        "android-touch-trusted",
+        "android-voices",
+        "android-webgl",
+        "android-webgpu",
+    ),
 }
 
 

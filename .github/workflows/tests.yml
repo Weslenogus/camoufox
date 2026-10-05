@@ -848,6 +848,7 @@ jobs:
           - {leg: spoofing, title: "Patch guards: spoofing"}
           - {leg: automation, title: "Patch guards: automation"}
           - {leg: parity, title: "Patch guards: stock parity"}
+          - {leg: android, title: "Patch guards: Android profile"}
           - {leg: skiplist, title: "Skiplist audit"}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
