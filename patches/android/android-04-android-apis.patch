@@ -26,10 +26,10 @@ index f9629db4b1..48fc3f4a81 100644
  }  // namespace mozilla::dom
 diff --git a/dom/base/ContactsManager.cpp b/dom/base/ContactsManager.cpp
 new file mode 100644
-index 0000000000..0abc96d3ed
+index 0000000000..1d13f1cc4f
 --- /dev/null
 +++ b/dom/base/ContactsManager.cpp
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,91 @@
 +/* Camoufox: navigator.contacts for an emulated Android device. See
 + * ContactsManager.h. */
 +#include "mozilla/dom/ContactsManager.h"
@@ -39,6 +39,7 @@ index 0000000000..0abc96d3ed
 +#include "mozilla/dom/Promise.h"
 +#include "mozilla/dom/WindowContext.h"
 +#include "nsPIDOMWindow.h"
++#include "nsPIDOMWindowInlines.h"
 +
 +namespace mozilla::dom {
 +
@@ -735,7 +736,7 @@ index 0000000000..6cb4af9aa2
 +
 +#endif  // mozilla_dom_NDEFReader_h
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index c072080127..ba63b118e6 100644
+index d9602e7d08..618c49ea9b 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -7,6 +7,7 @@
@@ -752,8 +753,8 @@ index c072080127..ba63b118e6 100644
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaCapabilities)
 +  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mContacts)
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mMediaSession)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mAudioSession)
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mAddonManager)
-   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWebGpu)
 @@ -253,6 +255,8 @@ void Navigator::Invalidate() {
  
    mMediaCapabilities = nullptr;
@@ -763,7 +764,7 @@ index c072080127..ba63b118e6 100644
    if (mMediaSession) {
      mMediaSession->Shutdown();
      mMediaSession = nullptr;
-@@ -2388,6 +2392,13 @@ dom::MediaCapabilities* Navigator::MediaCapabilities() {
+@@ -2397,6 +2401,13 @@ dom::MediaCapabilities* Navigator::MediaCapabilities() {
    return mMediaCapabilities;
  }
  
@@ -778,10 +779,10 @@ index c072080127..ba63b118e6 100644
    if (!mMediaSession) {
      mMediaSession = new dom::MediaSession(GetWindow());
 diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
-index 074b38ae18..bf13b68dea 100644
+index 29a77324b3..8e0f68c4c2 100644
 --- a/dom/base/Navigator.h
 +++ b/dom/base/Navigator.h
-@@ -86,6 +86,7 @@ class VRServiceTest;
+@@ -87,6 +87,7 @@ class VRServiceTest;
  class XRSystem;
  class StorageManager;
  class MediaCapabilities;
@@ -789,28 +790,28 @@ index 074b38ae18..bf13b68dea 100644
  class MediaSession;
  class UserActivation;
  struct ShareData;
-@@ -233,6 +234,8 @@ class Navigator final : public nsISupports, public nsWrapperCache {
- 
+@@ -234,6 +235,8 @@ class Navigator final : public nsISupports, public nsWrapperCache {
    dom::MediaCapabilities* MediaCapabilities();
    dom::MediaSession* MediaSession();
+   dom::AudioSession* AudioSession();
 +  // Camoufox: the Contact Picker, on the Android device profiles only.
 +  dom::ContactsManager* Contacts();
  
    AddonManager* GetMozAddonManager(ErrorResult& aRv);
  
-@@ -314,6 +317,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+@@ -315,6 +318,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
    nsTArray<uint32_t> mRequestedVibrationPattern;
    RefPtr<StorageManager> mStorageManager;
    RefPtr<dom::MediaCapabilities> mMediaCapabilities;
 +  RefPtr<dom::ContactsManager> mContacts;
    RefPtr<dom::MediaSession> mMediaSession;
+   RefPtr<dom::AudioSession> mAudioSession;
    RefPtr<AddonManager> mAddonManager;
-   RefPtr<webgpu::Instance> mWebGpu;
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index ecacba597e..f843ea8d53 100644
+index f6f7b4735d..9bfc63c289 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -563,8 +563,17 @@ SOURCES += ["NavigatorManager.cpp"]
+@@ -578,8 +578,17 @@ SOURCES += ["NavigatorManager.cpp"]
  # MaskConfig.hpp and are included (as a header) by generated bindings.
  SOURCES += ["AndroidDevice.cpp"]
  
@@ -829,10 +830,10 @@ index ecacba597e..f843ea8d53 100644
  
  # ScreenDimensionManager compiled separately for the same reason.
 diff --git a/dom/base/nsGlobalWindowInner.h b/dom/base/nsGlobalWindowInner.h
-index 95184adcef..5094b57ebc 100644
+index ddcd7ccdb0..1300ca23fb 100644
 --- a/dom/base/nsGlobalWindowInner.h
 +++ b/dom/base/nsGlobalWindowInner.h
-@@ -597,6 +597,22 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
+@@ -599,6 +599,22 @@ class nsGlobalWindowInner final : public mozilla::dom::EventTarget,
  #undef ERROR_EVENT
  #undef EVENT
  
@@ -856,7 +857,7 @@ index 95184adcef..5094b57ebc 100644
  
    static JSObject* CreateNamedPropertiesObject(JSContext* aCx,
 diff --git a/dom/bindings/Bindings.conf b/dom/bindings/Bindings.conf
-index 45162988ea..f75e813e05 100644
+index ac97a6a445..5b846ffb61 100644
 --- a/dom/bindings/Bindings.conf
 +++ b/dom/bindings/Bindings.conf
 @@ -120,6 +120,11 @@ DOMInterfaces = {
@@ -871,7 +872,7 @@ index 45162988ea..f75e813e05 100644
  'ConsoleInstance': {
      'implicitJSContext': ['clear', 'count', 'countReset', 'groupEnd', 'time', 'timeEnd'],
  },
-@@ -571,6 +576,19 @@ DOMInterfaces = {
+@@ -576,6 +581,19 @@ DOMInterfaces = {
      'headerFile': 'nsDOMMutationObserver.h',
  },
  
@@ -1060,7 +1061,7 @@ index 0000000000..72fc5b5900
 +  AbortSignal signal;
 +};
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index 819a1064d1..a15c51d7ba 100644
+index 7febb6c2f5..c1a6630efd 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -316,6 +316,14 @@ interface mixin NavigatorDeviceMemory {
@@ -1079,10 +1080,10 @@ index 819a1064d1..a15c51d7ba 100644
  partial interface Navigator {
    [Pref="security.webauth.webauthn", SecureContext, SameObject]
 diff --git a/dom/webidl/Window.webidl b/dom/webidl/Window.webidl
-index 6b4c7101fa..6921697a2a 100644
+index 6a5b50744d..265fb66acc 100644
 --- a/dom/webidl/Window.webidl
 +++ b/dom/webidl/Window.webidl
-@@ -712,14 +712,20 @@ Window includes TouchEventHandlers;
+@@ -715,14 +715,20 @@ Window includes TouchEventHandlers;
  
  Window includes OnErrorEventHandlerForWindow;
  
@@ -1106,10 +1107,10 @@ index 6b4c7101fa..6921697a2a 100644
  [MOZ_CAN_RUN_SCRIPT_BOUNDARY]
  callback PromiseDocumentFlushedCallback = any ();
 diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
-index 52a234ea0b..acd3e42fa7 100644
+index c9429d045d..df5566aa4f 100644
 --- a/dom/webidl/moz.build
 +++ b/dom/webidl/moz.build
-@@ -496,6 +496,7 @@ WEBIDL_FILES = [
+@@ -497,6 +497,7 @@ WEBIDL_FILES = [
      "CompressionStream.webidl",
      "Console.webidl",
      "ConstantSourceNode.webidl",
@@ -1117,7 +1118,7 @@ index 52a234ea0b..acd3e42fa7 100644
      "ConvolverNode.webidl",
      "CookieChangeEvent.webidl",
      "CookieStore.webidl",
-@@ -841,6 +842,7 @@ WEBIDL_FILES = [
+@@ -844,6 +845,7 @@ WEBIDL_FILES = [
      "NavigationPreloadManager.webidl",
      "NavigationTransition.webidl",
      "Navigator.webidl",

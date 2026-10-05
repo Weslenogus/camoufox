@@ -1,5 +1,5 @@
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index ba63b118e6..86004d0300 100644
+index 618c49ea9b..74b3034dd6 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -8,6 +8,7 @@
@@ -11,8 +11,8 @@ index ba63b118e6..86004d0300 100644
  #include "nsJSUtils.h"
  
 @@ -179,6 +180,7 @@ NS_IMPL_CYCLE_COLLECTION_TRAVERSE_BEGIN(Navigator)
+   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mLogin)
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mModelContext)
-   NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mPrivateAttribution)
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mUserActivation)
 +  NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mUserAgentData)
    NS_IMPL_CYCLE_COLLECTION_TRAVERSE(mWakeLock)
@@ -27,7 +27,7 @@ index ba63b118e6..86004d0300 100644
    mSharePromise = nullptr;
  
    mWakeLock = nullptr;
-@@ -780,6 +784,14 @@ bool Navigator::GlobalPrivacyControl() {
+@@ -789,6 +793,14 @@ bool Navigator::GlobalPrivacyControl() {
           gpcStatus;
  }
  
@@ -43,18 +43,18 @@ index ba63b118e6..86004d0300 100644
    // Only exposed when configured (AndroidDevice::HasDeviceMemory).
    return AndroidDevice::DeviceMemory().value_or(0.0);
 diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
-index bf13b68dea..24cd1a1d5e 100644
+index 8e0f68c4c2..913c954485 100644
 --- a/dom/base/Navigator.h
 +++ b/dom/base/Navigator.h
-@@ -42,6 +42,7 @@ class CredentialsContainer;
+@@ -44,6 +44,7 @@ class CredentialsContainer;
  class Clipboard;
  class LockManager;
  class ModelContext;
 +class NavigatorUAData;
  class NavigatorLogin;
- class PrivateAttribution;
  class HTMLMediaElement;
-@@ -179,6 +180,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+ class AudioContext;
+@@ -180,6 +181,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
    bool JavaEnabled() { return false; }
    uint64_t HardwareConcurrency();
    double DeviceMemory();
@@ -62,9 +62,9 @@ index bf13b68dea..24cd1a1d5e 100644
    bool TaintEnabled() { return false; }
  
    already_AddRefed<LegacyMozTCPSocket> MozTCPSocket();
-@@ -327,6 +329,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+@@ -328,6 +330,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+   RefPtr<NavigatorLogin> mLogin;
    RefPtr<dom::ModelContext> mModelContext;
-   RefPtr<dom::PrivateAttribution> mPrivateAttribution;
    RefPtr<dom::UserActivation> mUserActivation;
 +  RefPtr<dom::NavigatorUAData> mUserAgentData;
    RefPtr<dom::WakeLockJS> mWakeLock;
@@ -256,10 +256,10 @@ index 0000000000..ad8eb8ae0d
 +
 +#endif  // mozilla_dom_NavigatorUAData_h
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index f843ea8d53..32f4db0802 100644
+index 9bfc63c289..918968b879 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -576,6 +576,13 @@ EXPORTS.mozilla.dom += [
+@@ -591,6 +591,13 @@ EXPORTS.mozilla.dom += [
      "NDEFReader.h",
  ]
  
@@ -274,7 +274,7 @@ index f843ea8d53..32f4db0802 100644
  SOURCES += ["ScreenDimensionManager.cpp"]
  
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index a15c51d7ba..a726d1d704 100644
+index c1a6630efd..50f0236754 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -315,6 +315,8 @@ interface mixin NavigatorDeviceMemory {
@@ -361,10 +361,10 @@ index bf48a223f6..f16e5dc645 100644
  WorkerNavigator includes GlobalPrivacyControl;
  
 diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
-index acd3e42fa7..6921360139 100644
+index df5566aa4f..9a61a02386 100644
 --- a/dom/webidl/moz.build
 +++ b/dom/webidl/moz.build
-@@ -842,6 +842,7 @@ WEBIDL_FILES = [
+@@ -845,6 +845,7 @@ WEBIDL_FILES = [
      "NavigationPreloadManager.webidl",
      "NavigationTransition.webidl",
      "Navigator.webidl",
@@ -373,7 +373,7 @@ index acd3e42fa7..6921360139 100644
      "NetErrorInfo.webidl",
      "NetworkInformation.webidl",
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index 98b08d00b9..d7a386ed5d 100644
+index c2f93713b7..03b93099d2 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -5,6 +5,7 @@
@@ -392,7 +392,7 @@ index 98b08d00b9..d7a386ed5d 100644
  NS_IMPL_CYCLE_COLLECTION_TRAVERSE_END
  
  WorkerNavigator::WorkerNavigator(const NavigatorProperties& aProperties,
-@@ -87,6 +89,8 @@ void WorkerNavigator::Invalidate() {
+@@ -92,6 +94,8 @@ void WorkerNavigator::Invalidate() {
  
    mMediaCapabilities = nullptr;
  
@@ -401,7 +401,7 @@ index 98b08d00b9..d7a386ed5d 100644
    mWebGpu = nullptr;
  
    if (mLocks) {
-@@ -257,6 +261,17 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -263,6 +267,17 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
    runnable->Dispatch(workerPrivate, Canceling, aRv);
  }
  
@@ -448,19 +448,19 @@ index a6204c0dd0..2684ddce08 100644
    StorageManager* Storage();
  
 diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
-index 1042d8d15c..67d3211ebb 100644
+index a43ecf238e..007ad8bd88 100644
 --- a/netwerk/protocol/http/nsHttpHandler.cpp
 +++ b/netwerk/protocol/http/nsHttpHandler.cpp
 @@ -14,6 +14,8 @@
- #include "nsHttpConnectionMgr.h"
- #include "nsHttpHandler.h"
+ #include "LoadContextInfo.h"
  #include "MaskConfig.hpp"
+ #include "SerializedLoadContext.h"
 +#include "UAClientHints.hpp"
 +#include "nsMixedContentBlocker.h"
- #include "nsHttpChannel.h"
- #include "nsHTTPCompressConv.h"
- #include "nsHttpAuthCache.h"
-@@ -745,6 +747,21 @@ nsresult nsHttpHandler::AddStandardRequestHeaders(
+ #include "TRRServiceChannel.h"
+ #include "Tickler.h"
+ #include "mozilla/AntiTrackingRedirectHeuristic.h"
+@@ -744,6 +746,21 @@ nsresult nsHttpHandler::AddStandardRequestHeaders(
      const nsCString& aLanguageOverride) {
    nsresult rv;
  

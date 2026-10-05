@@ -1,5 +1,5 @@
 diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
-index 918f8ef045..1132e0563d 100644
+index b12262169f..ce42baf1b2 100644
 --- a/dom/events/PointerEventHandler.cpp
 +++ b/dom/events/PointerEventHandler.cpp
 @@ -23,6 +23,10 @@
@@ -13,7 +13,7 @@ index 918f8ef045..1132e0563d 100644
  #include "mozilla/dom/Touch.h"
  
  namespace mozilla {
-@@ -983,6 +987,99 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
+@@ -1042,6 +1046,99 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
  // is tracked under; touch identifiers are small non-negative integers.
  static constexpr int32_t kEmulatedFingerForMouse = -1;
  
@@ -113,7 +113,7 @@ index 918f8ef045..1132e0563d 100644
  /* static */
  void PointerEventHandler::InitPointerEventFromMouse(
      WidgetPointerEvent* aPointerEvent, const WidgetMouseEvent* aMouseEvent,
-@@ -1383,6 +1480,13 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
+@@ -1442,6 +1539,13 @@ void PointerEventHandler::DispatchPointerFromMouseOrTouch(
      // dispatch mouse boundary events later.
      mouseEvent->mSynthesizeMoveAfterDispatch |=
          event.mSynthesizeMoveAfterDispatch;
@@ -163,7 +163,7 @@ index fa6f6fcaa8..4094a09ba7 100644
 +
  }  // namespace mozilla::dom
 diff --git a/dom/events/Touch.h b/dom/events/Touch.h
-index 722e0ca5ad..32a43b95d9 100644
+index 255cb2fee7..973068a4af 100644
 --- a/dom/events/Touch.h
 +++ b/dom/events/Touch.h
 @@ -85,6 +85,10 @@ class Touch final : public nsISupports,

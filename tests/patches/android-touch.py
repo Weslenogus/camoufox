@@ -16,8 +16,8 @@ With {"device:profile": "pixel10"}:
     ('ontouchstart' in window, document.createTouch).
 
 The control launch keeps Firefox's shape: 1px automation touches, Juggler's
-synthesized mouse pointer (input source unknown, so pointerType ""), a fine
-hovering primary pointer.
+synthesized mouse pointer (a real mouse's input source, so pointerType
+"mouse"), a fine hovering primary pointer.
 
 Run:
     python tests/patches/android-touch.py [--binary /path/to/camoufox-bin]
@@ -150,7 +150,7 @@ async def main(binary) -> bool:
         "(pointer: fine)": shape["(pointer: fine)"],
         "tap radiusX": s.get("radiusX"),
         "mouse pointerType": down.get("pointerType"),
-    }, {"(pointer: fine)": True, "tap radiusX": 1, "mouse pointerType": ""})
+    }, {"(pointer: fine)": True, "tap radiusX": 1, "mouse pointerType": "mouse"})
     print("\nPASS" if ok and control else "\nFAIL")
     return ok and control
 

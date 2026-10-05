@@ -12,8 +12,9 @@ says "desktop". With {"device:profile": "pixel10"}:
   * Contact Picker: navigator.contacts (ContactsManager), getProperties()
     resolving Chrome's five properties, select() rejecting SecurityError
     without user activation (called from the page's own script at load) and
-    resolving with it (Juggler, like Chromium, evaluates with a user gesture;
-    the picker is dismissed at once); ContactAddress present;
+    resolving with it (right after a trusted click, the only way a page gets
+    activation -- evaluate() grants none; the picker is dismissed at once);
+    ContactAddress present;
   * window.orientation (0), window.onorientationchange,
     window.ondeviceorientationabsolute.
 
@@ -59,7 +60,6 @@ PROBE = r"""async () => {
   out['event.serialNumber'] = ev.serialNumber;
 
   out['contacts.getProperties()'] = await navigator.contacts.getProperties();
-  out['contacts.select() with activation'] = await reject(navigator.contacts.select(['name']));
   return out;
 }"""
 
@@ -115,6 +115,9 @@ async def probe(binary, config):
             if out.get("navigator.contacts"):
                 out["contacts.select() without activation"] = await page.evaluate(
                     "mw:window.selectWithoutGesture")
+                await page.mouse.click(5, 5)
+                out["contacts.select() with activation"] = await page.evaluate(
+                    "navigator.contacts.select(['name']).then(() => 'resolved', e => e.name)")
             return out
 
 

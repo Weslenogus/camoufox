@@ -35,7 +35,7 @@ index 0000000000..dba4847955
 +
 +#endif /* js_AutomationFrames_h */
 diff --git a/js/src/moz.build b/js/src/moz.build
-index d433899af7..7c403042b0 100644
+index 947a5abd15..62542ff230 100644
 --- a/js/src/moz.build
 +++ b/js/src/moz.build
 @@ -103,6 +103,7 @@ EXPORTS.js += [
@@ -47,7 +47,7 @@ index d433899af7..7c403042b0 100644
      "../public/BuildId.h",
      "../public/CallAndConstruct.h",
 diff --git a/js/src/vm/SavedStacks.cpp b/js/src/vm/SavedStacks.cpp
-index 9c25e2753a..c9f9d67e67 100644
+index db96f4fbbb..dfb7ab4665 100644
 --- a/js/src/vm/SavedStacks.cpp
 +++ b/js/src/vm/SavedStacks.cpp
 @@ -15,6 +15,7 @@
@@ -58,7 +58,7 @@ index 9c25e2753a..c9f9d67e67 100644
  #include "js/CharacterEncoding.h"
  #include "js/ColumnNumber.h"  // JS::LimitedColumnNumberOneOrigin, JS::TaggedColumnNumberOneOrigin
  #include "js/ErrorReport.h"           // JSErrorBase
-@@ -614,9 +615,43 @@ bool SavedFrame::construct(JSContext* cx, unsigned argc, Value* vp) {
+@@ -615,9 +616,43 @@ bool SavedFrame::construct(JSContext* cx, unsigned argc, Value* vp) {
    return false;
  }
  
@@ -102,7 +102,7 @@ index 9c25e2753a..c9f9d67e67 100644
    auto subsumes = cx->runtime()->securityCallbacks->subsumes;
    if (!subsumes) {
      return true;
-@@ -696,7 +731,8 @@ JS_PUBLIC_API JSObject* GetFirstSubsumedSavedFrame(
+@@ -697,7 +732,8 @@ JS_PUBLIC_API JSObject* GetFirstSubsumedSavedFrame(
  
    auto matcher = [subsumes](JSContext* cx, JSPrincipals* principals,
                              Handle<SavedFrame*> frame) -> bool {
@@ -112,7 +112,7 @@ index 9c25e2753a..c9f9d67e67 100644
    };
  
    bool skippedAsync;
-@@ -2143,3 +2179,7 @@ JS_PUBLIC_API bool ConstructSavedFrameStackSlow(
+@@ -2141,3 +2177,7 @@ JS_PUBLIC_API bool ConstructSavedFrameStackSlow(
  
  }  // namespace ubi
  }  // namespace JS
@@ -121,18 +121,18 @@ index 9c25e2753a..c9f9d67e67 100644
 +  js::gHideAutomationFrames = value;
 +}
 diff --git a/js/xpconnect/src/XPCJSContext.cpp b/js/xpconnect/src/XPCJSContext.cpp
-index 01bdf8f76e..2babfa5299 100644
+index 81037e6ea4..ba374660aa 100644
 --- a/js/xpconnect/src/XPCJSContext.cpp
 +++ b/js/xpconnect/src/XPCJSContext.cpp
 @@ -8,6 +8,7 @@
- 
+ #include "mozilla/MemoryTelemetry.h"
  #include "MaskConfig.hpp"
  #include "js/ArmNaN.h"
 +#include "js/AutomationFrames.h"
  
- #include "xpcprivate.h"
- #include "xpcpublic.h"
-@@ -1244,6 +1245,11 @@ nsresult XPCJSContext::Initialize() {
+ #include "mozilla/Preferences.h"
+ #include "mozilla/Services.h"
+@@ -1248,6 +1249,11 @@ nsresult XPCJSContext::Initialize() {
    if (MaskConfig::CheckBool("cpu:armDefaultNaN")) {
      JS::SetUseArmDefaultNaN(true);
    }

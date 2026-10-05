@@ -1,8 +1,8 @@
 diff --git a/dom/media/webaudio/AudioContext.cpp b/dom/media/webaudio/AudioContext.cpp
-index e3e86872fa..5043009ed1 100644
+index 355d9d4c13..4510eee60b 100644
 --- a/dom/media/webaudio/AudioContext.cpp
 +++ b/dom/media/webaudio/AudioContext.cpp
-@@ -549,6 +549,13 @@ AudioListener* AudioContext::Listener() {
+@@ -556,6 +556,13 @@ AudioListener* AudioContext::Listener() {
    return mListener;
  }
  
@@ -17,7 +17,7 @@ index e3e86872fa..5043009ed1 100644
    if (mIsShutDown) {
      return 0.0;
 diff --git a/dom/media/webaudio/AudioContext.h b/dom/media/webaudio/AudioContext.h
-index e3c04c4b83..ce9a0d45bd 100644
+index 968f7a4ec8..96836e2b70 100644
 --- a/dom/media/webaudio/AudioContext.h
 +++ b/dom/media/webaudio/AudioContext.h
 @@ -189,11 +189,11 @@ class AudioContext final : public DOMEventTargetHelper,

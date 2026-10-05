@@ -68,7 +68,7 @@ index 0000000000..f9629db4b1
 +
 +#endif  // mozilla_dom_AndroidDevice_h
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index bf721422fd..c072080127 100644
+index faf40f6f79..d9602e7d08 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -6,6 +6,7 @@
@@ -107,7 +107,7 @@ index bf721422fd..c072080127 100644
    // Legacy build date hardcoded for backward compatibility (bug 776376)
    aProductSub.AssignLiteral(LEGACY_UA_GECKO_TRAIL);
  }
-@@ -763,6 +776,11 @@ bool Navigator::GlobalPrivacyControl() {
+@@ -772,6 +785,11 @@ bool Navigator::GlobalPrivacyControl() {
           gpcStatus;
  }
  
@@ -120,10 +120,10 @@ index bf721422fd..c072080127 100644
    EnsureGlobalTimezoneInitialized();
    // Camoufox: per-context hardware concurrency
 diff --git a/dom/base/Navigator.h b/dom/base/Navigator.h
-index aab58cc025..074b38ae18 100644
+index f5b5c3d9e6..29a77324b3 100644
 --- a/dom/base/Navigator.h
 +++ b/dom/base/Navigator.h
-@@ -177,6 +177,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
+@@ -178,6 +178,7 @@ class Navigator final : public nsISupports, public nsWrapperCache {
                    ErrorResult& aRv) const;
    bool JavaEnabled() { return false; }
    uint64_t HardwareConcurrency();
@@ -132,10 +132,10 @@ index aab58cc025..074b38ae18 100644
  
    already_AddRefed<LegacyMozTCPSocket> MozTCPSocket();
 diff --git a/dom/base/moz.build b/dom/base/moz.build
-index 52a61b0ca1..ecacba597e 100644
+index f2fa8a3543..f6f7b4735d 100644
 --- a/dom/base/moz.build
 +++ b/dom/base/moz.build
-@@ -559,6 +559,14 @@ SOURCES += [
+@@ -574,6 +574,14 @@ SOURCES += [
  # (includes RoverfoxStorageManager.h which can affect compilation units)
  SOURCES += ["NavigatorManager.cpp"]
  
@@ -151,7 +151,7 @@ index 52a61b0ca1..ecacba597e 100644
  SOURCES += ["ScreenDimensionManager.cpp"]
  
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index a4db5f65d9..819a1064d1 100644
+index aee586a781..7febb6c2f5 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -307,6 +307,15 @@ interface mixin NavigatorConcurrentHardware {
@@ -183,7 +183,7 @@ index 54f4b9cd81..bf48a223f6 100644
  WorkerNavigator includes GlobalPrivacyControl;
  
 diff --git a/dom/workers/WorkerNavigator.cpp b/dom/workers/WorkerNavigator.cpp
-index b64b00c2fb..98b08d00b9 100644
+index f081fbf9ee..c2f93713b7 100644
 --- a/dom/workers/WorkerNavigator.cpp
 +++ b/dom/workers/WorkerNavigator.cpp
 @@ -4,6 +4,7 @@
@@ -194,7 +194,7 @@ index b64b00c2fb..98b08d00b9 100644
  #include "mozilla/dom/NavigatorManager.h"
  #include "mozilla/dom/WorkerPrivate.h"
  
-@@ -256,6 +257,12 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
+@@ -262,6 +263,12 @@ void WorkerNavigator::GetUserAgent(nsString& aUserAgent, CallerType aCallerType,
    runnable->Dispatch(workerPrivate, Canceling, aRv);
  }
  

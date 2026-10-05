@@ -1,5 +1,5 @@
 diff --git a/dom/base/ScreenOrientation.cpp b/dom/base/ScreenOrientation.cpp
-index 2612a0b747..cf358d650e 100644
+index c803dfc7df..e0b01bf681 100644
 --- a/dom/base/ScreenOrientation.cpp
 +++ b/dom/base/ScreenOrientation.cpp
 @@ -4,6 +4,8 @@
@@ -11,7 +11,7 @@ index 2612a0b747..cf358d650e 100644
  #include "mozilla/DOMEventTargetHelper.h"
  #include "mozilla/Hal.h"
  #include "mozilla/Preferences.h"
-@@ -691,7 +693,46 @@ void ScreenOrientation::CleanupFullscreenListener() {
+@@ -703,7 +705,46 @@ void ScreenOrientation::CleanupFullscreenListener() {
    mFullscreenListener = nullptr;
  }
  
@@ -58,7 +58,7 @@ index 2612a0b747..cf358d650e 100644
    if (nsContentUtils::ShouldResistFingerprinting(
            aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
      Document* doc = GetResponsibleDocument();
-@@ -706,6 +747,9 @@ OrientationType ScreenOrientation::DeviceType(CallerType aCallerType) const {
+@@ -721,6 +762,9 @@ OrientationType ScreenOrientation::DeviceType(CallerType aCallerType) const {
  }
  
  uint16_t ScreenOrientation::DeviceAngle(CallerType aCallerType) const {
@@ -68,7 +68,7 @@ index 2612a0b747..cf358d650e 100644
    if (nsContentUtils::ShouldResistFingerprinting(
            aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
      Document* doc = GetResponsibleDocument();
-@@ -728,6 +772,10 @@ OrientationType ScreenOrientation::GetType(CallerType aCallerType,
+@@ -745,6 +789,10 @@ OrientationType ScreenOrientation::GetType(CallerType aCallerType,
      return OrientationType::Portrait_primary;
    }
  
@@ -78,8 +78,8 @@ index 2612a0b747..cf358d650e 100644
 +
    OrientationType orientation = bc->GetCurrentOrientationType();
    if (nsContentUtils::ShouldResistFingerprinting(
-           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
-@@ -746,6 +794,10 @@ uint16_t ScreenOrientation::GetAngle(CallerType aCallerType,
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation) &&
+@@ -764,6 +812,10 @@ uint16_t ScreenOrientation::GetAngle(CallerType aCallerType,
      return 0;
    }
  
@@ -89,12 +89,41 @@ index 2612a0b747..cf358d650e 100644
 +
    uint16_t angle = static_cast<uint16_t>(bc->GetCurrentOrientationAngle());
    if (nsContentUtils::ShouldResistFingerprinting(
-           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation)) {
+           aCallerType, GetRelevantGlobal(), RFPTarget::ScreenOrientation) &&
+diff --git a/dom/base/nsGlobalWindowInner.cpp b/dom/base/nsGlobalWindowInner.cpp
+index 8ead869729..0f03b75e2d 100644
+--- a/dom/base/nsGlobalWindowInner.cpp
++++ b/dom/base/nsGlobalWindowInner.cpp
+@@ -3766,12 +3766,24 @@ int32_t nsGlobalWindowInner::GetOuterWidth(CallerType aCallerType,
+   // contradicted inner whenever the window ended up a different size: the WM
+   // clamped or auto-maximized it, or Juggler resized it for a viewport. Pages
+   // then saw innerWidth > outerWidth (measured 1853 > 1680 on GNOME).
++  // An emulated Android device is the exception: its window is the screen,
++  // which the desktop window cannot shrink to (its minimum width is 500px).
++  if (MaskConfig::IsAndroidDevice()) {
++    if (auto value = MaskConfig::GetInt32("window.outerWidth")) {
++      return value.value();
++    }
++  }
+   FORWARD_TO_OUTER_OR_THROW(GetOuterWidthOuter, (aCallerType, aError), aError,
+                             0);
+ }
+ 
+ int32_t nsGlobalWindowInner::GetOuterHeight(CallerType aCallerType,
+                                             ErrorResult& aError) {
++  if (MaskConfig::IsAndroidDevice()) {
++    if (auto value = MaskConfig::GetInt32("window.outerHeight")) {
++      return value.value();
++    }
++  }
+   FORWARD_TO_OUTER_OR_THROW(GetOuterHeightOuter, (aCallerType, aError), aError,
+                             0);
+ }
 diff --git a/dom/base/nsScreen.cpp b/dom/base/nsScreen.cpp
-index d27c51aa5a..5d6293a5ac 100644
+index 6dfd4ea066..c6ce4803ce 100644
 --- a/dom/base/nsScreen.cpp
 +++ b/dom/base/nsScreen.cpp
-@@ -215,6 +215,11 @@ bool nsScreen::IsFullscreen() const {
+@@ -216,6 +216,11 @@ bool nsScreen::IsFullscreen() const {
  }
  
  uint16_t nsScreen::GetOrientationAngle() const {
@@ -107,7 +136,7 @@ index d27c51aa5a..5d6293a5ac 100644
    if (context) {
      return context->GetScreenOrientationAngle();
 diff --git a/layout/style/GeckoBindings.cpp b/layout/style/GeckoBindings.cpp
-index ee784cef62..674d748a6e 100644
+index 6195ce1261..1941a31e97 100644
 --- a/layout/style/GeckoBindings.cpp
 +++ b/layout/style/GeckoBindings.cpp
 @@ -6,6 +6,8 @@
@@ -119,7 +148,7 @@ index ee784cef62..674d748a6e 100644
  #include "AnchorPositioningUtils.h"
  #include "ChildIterator.h"
  #include "ErrorReporter.h"
-@@ -1780,6 +1782,17 @@ bool Gecko_AssertClassAttrValueIsSane(const nsAttrValue* aValue) {
+@@ -1730,6 +1732,17 @@ bool Gecko_AssertClassAttrValueIsSane(const nsAttrValue* aValue) {
  void Gecko_GetSafeAreaInsets(const nsPresContext* aPresContext, float* aTop,
                               float* aRight, float* aBottom, float* aLeft) {
    MOZ_ASSERT(aPresContext);
@@ -138,10 +167,10 @@ index ee784cef62..674d748a6e 100644
        LayoutDeviceMargin(aPresContext->GetSafeAreaInsets()) /
        aPresContext->CSSToDevPixelScale();
 diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
-index fc31f45c65..49246751e1 100644
+index acc7713de7..16fb5e7adc 100644
 --- a/layout/style/nsMediaFeatures.cpp
 +++ b/layout/style/nsMediaFeatures.cpp
-@@ -230,6 +230,16 @@ float Gecko_MediaFeatures_GetResolution(const Document* aDocument) {
+@@ -256,6 +256,16 @@ float Gecko_MediaFeatures_GetResolution(const Document* aDocument) {
      return pc->GetOverrideDPPX();
    }
  

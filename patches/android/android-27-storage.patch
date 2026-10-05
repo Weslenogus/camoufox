@@ -38,10 +38,10 @@ index 918c493646..14cc940013 100644
  }
  
 diff --git a/dom/quota/moz.build b/dom/quota/moz.build
-index 9192b1c522..d2161ea626 100644
+index 32a51985b3..cd29729480 100644
 --- a/dom/quota/moz.build
 +++ b/dom/quota/moz.build
-@@ -192,3 +192,6 @@ LOCAL_INCLUDES += [
+@@ -202,3 +202,6 @@ LOCAL_INCLUDES += [
      "/caps",
      "/dom/fs/include",
  ]

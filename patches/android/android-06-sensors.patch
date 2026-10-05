@@ -1,5 +1,5 @@
 diff --git a/dom/system/moz.build b/dom/system/moz.build
-index d3c9bd6b76..8e6aeb2c45 100644
+index a56beb58da..5eaea95623 100644
 --- a/dom/system/moz.build
 +++ b/dom/system/moz.build
 @@ -82,4 +82,7 @@ LOCAL_INCLUDES += [
@@ -11,7 +11,7 @@ index d3c9bd6b76..8e6aeb2c45 100644
 +
  MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
 diff --git a/dom/system/nsDeviceSensors.cpp b/dom/system/nsDeviceSensors.cpp
-index e9c3911830..63a72e553d 100644
+index 7ceca8cd04..915b8fe07e 100644
 --- a/dom/system/nsDeviceSensors.cpp
 +++ b/dom/system/nsDeviceSensors.cpp
 @@ -6,6 +6,11 @@
@@ -41,7 +41,7 @@ index e9c3911830..63a72e553d 100644
    }
  
    for (int i = 0; i < NUM_SENSOR_TYPE; i++) {
-@@ -152,6 +162,12 @@ NS_IMETHODIMP nsDeviceSensors::AddWindowListener(uint32_t aType,
+@@ -166,6 +176,12 @@ NS_IMETHODIMP nsDeviceSensors::AddWindowListener(uint32_t aType,
  
    if (mWindowListeners[aType]->IndexOf(aWindow) != NoIndex) return NS_OK;
  
@@ -54,7 +54,7 @@ index e9c3911830..63a72e553d 100644
    if (!IsSensorEnabled(aType)) {
      RegisterSensorObserver((SensorType)aType, this);
    }
-@@ -172,6 +188,11 @@ NS_IMETHODIMP nsDeviceSensors::RemoveWindowListener(uint32_t aType,
+@@ -186,6 +202,11 @@ NS_IMETHODIMP nsDeviceSensors::RemoveWindowListener(uint32_t aType,
  
    mWindowListeners[aType]->RemoveElement(aWindow);
  
@@ -66,7 +66,20 @@ index e9c3911830..63a72e553d 100644
    if (mWindowListeners[aType]->Length() == 0)
      UnregisterSensorObserver((SensorType)aType, this);
  
-@@ -558,3 +579,267 @@ bool nsDeviceSensors::IsSensorAllowedByPref(uint32_t aType,
+@@ -425,7 +446,12 @@ void nsDeviceSensors::MaybeFireDOMOrientationEvent(EventTarget* aTarget,
+   if (!CanFireDOMOrientationEvent(aAlpha, aBeta, aGamma, aIsAbsolute)) {
+     return;
+   }
++  FireDOMOrientationEvent(aTarget, aAlpha, aBeta, aGamma, aIsAbsolute);
++}
+ 
++void nsDeviceSensors::FireDOMOrientationEvent(EventTarget* aTarget,
++                                              double aAlpha, double aBeta,
++                                              double aGamma, bool aIsAbsolute) {
+   DeviceOrientationEventInit init;
+   init.mBubbles = true;
+   init.mCancelable = false;
+@@ -618,3 +644,267 @@ bool nsDeviceSensors::IsSensorAllowedByPref(uint32_t aType,
    return !nsGlobalWindowInner::Cast(window)->ShouldResistFingerprinting(
        RFPTarget::DeviceSensors);
  }
@@ -335,7 +348,7 @@ index e9c3911830..63a72e553d 100644
 +  }
 +}
 diff --git a/dom/system/nsDeviceSensors.h b/dom/system/nsDeviceSensors.h
-index 3ee0f4cd4b..9e2e13cf92 100644
+index c99237dfa8..3e3bbc0799 100644
 --- a/dom/system/nsDeviceSensors.h
 +++ b/dom/system/nsDeviceSensors.h
 @@ -7,6 +7,7 @@
@@ -344,9 +357,9 @@ index 3ee0f4cd4b..9e2e13cf92 100644
  #include "mozilla/TimeStamp.h"
 +#include "mozilla/UniquePtr.h"
  #include "mozilla/dom/DeviceMotionEvent.h"
+ #include "mozilla/dom/DeviceOrientationEventBinding.h"
  #include "nsCOMArray.h"
- #include "nsCOMPtr.h"
-@@ -14,6 +15,8 @@
+@@ -15,6 +16,8 @@
  #include "nsTArray.h"
  
  class nsIDOMWindow;
@@ -355,9 +368,21 @@ index 3ee0f4cd4b..9e2e13cf92 100644
  
  namespace mozilla::dom {
  class Document;
-@@ -60,6 +63,16 @@ class nsDeviceSensors : public nsIDeviceSensors,
+@@ -52,6 +55,11 @@ class nsDeviceSensors : public nsIDeviceSensors,
+   void MaybeFireDOMOrientationEvent(mozilla::dom::EventTarget* target,
+                                     double aAlpha, double aBeta, double aGamma,
+                                     bool aIsAbsolute);
++  // Camoufox: without MaybeFireDOMOrientationEvent's 0.1 degree threshold,
++  // for the synthetic source, which reports at a fixed rate as Android does.
++  void FireDOMOrientationEvent(mozilla::dom::EventTarget* target,
++                               double aAlpha, double aBeta, double aGamma,
++                               bool aIsAbsolute);
  
-   bool IsSensorAllowedByPref(uint32_t aType, nsIDOMWindow* aWindow);
+   void FireDOMMotionEvent(mozilla::dom::Document* domDoc,
+                           mozilla::dom::EventTarget* target, uint32_t type,
+@@ -66,6 +74,16 @@ class nsDeviceSensors : public nsIDeviceSensors,
+   bool CanFireDOMOrientationEvent(double aAlpha, double aBeta, double aGamma,
+                                   bool aIsAbsolute);
  
 +  // Camoufox: a synthetic 60 Hz motion/orientation source for an emulated
 +  // Android device. See nsDeviceSensors.cpp.

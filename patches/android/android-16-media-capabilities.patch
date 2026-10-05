@@ -1,5 +1,5 @@
 diff --git a/dom/media/mediacapabilities/MediaCapabilities.cpp b/dom/media/mediacapabilities/MediaCapabilities.cpp
-index 5a44fe33f8..1cbceb47f2 100644
+index d1545d92c6..36ffc41788 100644
 --- a/dom/media/mediacapabilities/MediaCapabilities.cpp
 +++ b/dom/media/mediacapabilities/MediaCapabilities.cpp
 @@ -4,6 +4,8 @@
@@ -11,7 +11,7 @@ index 5a44fe33f8..1cbceb47f2 100644
  #include <utility>
  
  #include "AllocationPolicy.h"
-@@ -706,6 +708,58 @@ already_AddRefed<Promise> MediaCapabilities::DecodingInfo(
+@@ -814,6 +816,58 @@ already_AddRefed<Promise> MediaCapabilities::DecodingInfo(
    return promise.forget();
  }
  
@@ -70,7 +70,7 @@ index 5a44fe33f8..1cbceb47f2 100644
  // https://w3c.github.io/media-capabilities/#create-media-capabilities-decoding-info
  void MediaCapabilities::CreateMediaCapabilitiesDecodingInfo(
      const MediaDecodingConfiguration& aConfiguration, ErrorResult& aRv,
-@@ -746,6 +800,13 @@ void MediaCapabilities::CreateMediaCapabilitiesDecodingInfo(
+@@ -854,6 +908,13 @@ void MediaCapabilities::CreateMediaCapabilitiesDecodingInfo(
        audioContainer = Some(MediaContainerType(std::move(*audioMime)));
      }
    }

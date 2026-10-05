@@ -1,5 +1,5 @@
 diff --git a/dom/canvas/WebGLShaderValidator.cpp b/dom/canvas/WebGLShaderValidator.cpp
-index 016f86e7e7..1b21f2bb34 100644
+index dca28d797c..6b33f6cabf 100644
 --- a/dom/canvas/WebGLShaderValidator.cpp
 +++ b/dom/canvas/WebGLShaderValidator.cpp
 @@ -4,6 +4,8 @@
@@ -8,9 +8,9 @@ index 016f86e7e7..1b21f2bb34 100644
  
 +#include "MaskConfig.hpp"
 +
+ #include <algorithm>
  #include <string>
  #include <vector>
- 
 @@ -70,6 +72,11 @@ static ShCompileOptions ChooseValidatorCompileOptions(
  
    // -
@@ -23,34 +23,34 @@ index 016f86e7e7..1b21f2bb34 100644
    if (resources.MaxExpressionComplexity > 0) {
      options.limitExpressionComplexity = true;
    }
-diff --git a/gfx/angle/checkout/include/GLSLANG/ShaderLang.h b/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
-index b120b7539c..0f4ae184b7 100644
---- a/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
-+++ b/gfx/angle/checkout/include/GLSLANG/ShaderLang.h
-@@ -418,6 +418,10 @@ struct ShCompileOptions
-     // limits must be supplied in the BuiltinResources.
-     uint64_t validatePerStageMaxUniformBlocks : 1;
+diff --git a/third_party/angle/include/GLSLANG/ShaderLang.h b/third_party/angle/include/GLSLANG/ShaderLang.h
+index 408dfee298..fcaf25dbc5 100644
+--- a/third_party/angle/include/GLSLANG/ShaderLang.h
++++ b/third_party/angle/include/GLSLANG/ShaderLang.h
+@@ -487,6 +487,10 @@ struct ShCompileOptions
+     // Whether ESSL300 fragment outputs should be expanded to vec4s.
+     uint64_t expandFragmentOutputsToVec4 : 1;
  
 +    // Camoufox: round mediump and lowp float results in fragment shaders to
 +    // half precision, as a mobile GPU evaluates them (EmulateMediumpPrecision).
 +    uint64_t emulateMediumpPrecision : 1;
 +
      ShCompileOptionsMetal metal;
-     ShCompileOptionsPLS pls;
+     ShPixelLocalStorageOptions pls;
  };
-diff --git a/gfx/angle/checkout/src/compiler/translator/Compiler.cpp b/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
-index 05c1f8eb6a..333981e5bf 100644
---- a/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
-+++ b/gfx/angle/checkout/src/compiler/translator/Compiler.cpp
-@@ -25,6 +25,7 @@
- #include "compiler/translator/ValidateVaryingLocations.h"
- #include "compiler/translator/VariablePacker.h"
+diff --git a/third_party/angle/src/compiler/translator/Compiler.cpp b/third_party/angle/src/compiler/translator/Compiler.cpp
+index e0627ab6cc..0595a22764 100644
+--- a/third_party/angle/src/compiler/translator/Compiler.cpp
++++ b/third_party/angle/src/compiler/translator/Compiler.cpp
+@@ -27,6 +27,7 @@
+ #include "compiler/translator/ir/src/compile.h"
+ #include "compiler/translator/tree_ops/ClampFragDepth.h"
  #include "compiler/translator/tree_ops/ClampIndirectIndices.h"
 +#include "compiler/translator/tree_ops/EmulateMediumpPrecision.h"
  #include "compiler/translator/tree_ops/ClampPointSize.h"
  #include "compiler/translator/tree_ops/DeclareAndInitBuiltinsForInstancedMultiview.h"
  #include "compiler/translator/tree_ops/DeferGlobalInitializers.h"
-@@ -861,6 +862,15 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
+@@ -900,6 +901,15 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
          }
      }
  
@@ -65,12 +65,12 @@ index 05c1f8eb6a..333981e5bf 100644
 +
      if (compileOptions.initializeBuiltinsForInstancedMultiview &&
          (parseContext.isExtensionEnabled(TExtension::OVR_multiview2) ||
-          parseContext.isExtensionEnabled(TExtension::OVR_multiview)) &&
-diff --git a/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
+          parseContext.isExtensionEnabled(TExtension::OVR_multiview)))
+diff --git a/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp b/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
 new file mode 100644
 index 0000000000..bedbb81b62
 --- /dev/null
-+++ b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
++++ b/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp
 @@ -0,0 +1,480 @@
 +//
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
@@ -552,11 +552,11 @@ index 0000000000..bedbb81b62
 +}
 +
 +}  // namespace sh
-diff --git a/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
+diff --git a/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h b/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
 new file mode 100644
 index 0000000000..efc7a27ba6
 --- /dev/null
-+++ b/gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
++++ b/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h
 @@ -0,0 +1,28 @@
 +//
 +// Copyright 2026 The ANGLE Project Authors. All rights reserved.
@@ -586,15 +586,15 @@ index 0000000000..efc7a27ba6
 +}  // namespace sh
 +
 +#endif  // COMPILER_TRANSLATOR_TREEOPS_EMULATEMEDIUMPPRECISION_H_
-diff --git a/gfx/angle/targets/translator/moz.build b/gfx/angle/targets/translator/moz.build
-index 4b59b82403..e5b331ad19 100644
---- a/gfx/angle/targets/translator/moz.build
-+++ b/gfx/angle/targets/translator/moz.build
-@@ -227,6 +227,7 @@ SOURCES += [
-     "../../checkout/src/compiler/translator/tree_ops/DeclareAndInitBuiltinsForInstancedMultiview.cpp",
-     "../../checkout/src/compiler/translator/tree_ops/DeferGlobalInitializers.cpp",
-     "../../checkout/src/compiler/translator/tree_ops/EmulateGLFragColorBroadcast.cpp",
-+    "../../checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp",
-     "../../checkout/src/compiler/translator/tree_ops/EmulateMultiDrawShaderBuiltins.cpp",
-     "../../checkout/src/compiler/translator/tree_ops/FoldExpressions.cpp",
-     "../../checkout/src/compiler/translator/tree_ops/ForcePrecisionQualifier.cpp",
+diff --git a/third_party/angle/translator_gn/moz.build b/third_party/angle/translator_gn/moz.build
+index d93d96f668..bd311d6292 100644
+--- a/third_party/angle/translator_gn/moz.build
++++ b/third_party/angle/translator_gn/moz.build
+@@ -93,6 +93,7 @@ UNIFIED_SOURCES += [
+     "/third_party/angle/src/compiler/translator/tree_ops/DeclarePerVertexBlocks.cpp",
+     "/third_party/angle/src/compiler/translator/tree_ops/DeferGlobalInitializers.cpp",
+     "/third_party/angle/src/compiler/translator/tree_ops/EmulateGLFragColorBroadcast.cpp",
++    "/third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp",
+     "/third_party/angle/src/compiler/translator/tree_ops/EmulateMultiDrawShaderBuiltins.cpp",
+     "/third_party/angle/src/compiler/translator/tree_ops/FoldExpressions.cpp",
+     "/third_party/angle/src/compiler/translator/tree_ops/GatherDefaultUniforms.cpp",
