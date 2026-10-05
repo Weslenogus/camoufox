@@ -31,6 +31,7 @@ from ci._util import CI_DIR as CI_ROOT
 from ci._pytest import junit_test_id
 from ci._util import bump_release, opaque_id, parse_version, read_upstream_sh, write_upstream_sh
 from ci.pw_camoufox_plugin import load_skiplist, parse_shard, shard_of, skip_reason
+from ci.run_patch_guards import GROUPS as PATCH_GUARD_GROUPS
 from ci.run_sundial import _iter_entries, grade, redact
 from ci.summarize import merge_shards, validate_skiplist
 from ci.versions import resolve
@@ -951,10 +952,9 @@ def test_required_suites_are_names_a_runner_actually_writes():
 
     producible = {
         "build", "build_tester", "patch_guards", "pythonlib", "sundial",
-        "patch_guards_spoofing", "patch_guards_automation", "patch_guards_parity",
         "native", "native_rules", "native_browser", "native_growth",
         "playwright", "skiplist_audit", "typescript", "typescript_browser", "install",
-    }
+    } | {f"patch_guards_{group}" for group in PATCH_GUARD_GROUPS}
     unknown = required - producible
     assert not unknown, (
         f"required but no runner writes a result by that name: {sorted(unknown)}. "

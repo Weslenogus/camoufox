@@ -1195,7 +1195,7 @@ jobs:
           # summarize report "produced no result file" and fail the gate on
           # every pull request that did not touch the browser. Which is most of
           # them, and exactly the cheap path this pipeline advertises.
-          required="pythonlib typescript install typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity skiplist_audit build_tester playwright native_browser native_growth"
+          required="pythonlib typescript install typescript_browser native_rules patch_guards_spoofing patch_guards_automation patch_guards_parity patch_guards_android skiplist_audit build_tester playwright native_browser native_growth"
           if [ "${{ needs.resolve.outputs.browser_changed }}" = "true" ]; then
             required="$required build"
           fi
