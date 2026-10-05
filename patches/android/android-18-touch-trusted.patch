@@ -1,5 +1,5 @@
 diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
-index 918f8ef045..66c6c37535 100644
+index 918f8ef045..1132e0563d 100644
 --- a/dom/events/PointerEventHandler.cpp
 +++ b/dom/events/PointerEventHandler.cpp
 @@ -23,6 +23,10 @@
@@ -89,9 +89,9 @@ index 918f8ef045..66c6c37535 100644
 +    return;
 +  }
 +
-+  // The same finger as the pointer event just dispatched.
++  // The same finger as the pointer event just dispatched, unchanged.
 +  const dom::Touch::EmulatedFinger finger =
-+      dom::Touch::FingerFor(kEmulatedFingerForMouse, false);
++      dom::Touch::CurrentFinger(kEmulatedFingerForMouse);
 +  // Touch.radiusX/Y are reported as stored, in CSS pixels, like the pointer
 +  // event's width/height (twice the radius).
 +  RefPtr<dom::Touch> touch = new dom::Touch(
@@ -127,3 +127,53 @@ index 918f8ef045..66c6c37535 100644
    } else if (aMouseOrTouchEvent->mClass == eTouchEventClass) {
      WidgetTouchEvent* touchEvent = aMouseOrTouchEvent->AsTouchEvent();
      // loop over all touches and dispatch pointer events on each touch
+diff --git a/dom/events/Touch.cpp b/dom/events/Touch.cpp
+index fa6f6fcaa8..4094a09ba7 100644
+--- a/dom/events/Touch.cpp
++++ b/dom/events/Touch.cpp
+@@ -302,10 +302,15 @@ double Uniform(double aLo, double aHi) {
+ /* static */
+ bool Touch::EmulatesFingers() { return MaskConfig::IsAndroidDevice(); }
+ 
++static nsTHashMap<int32_t, Touch::EmulatedFinger>& Fingers() {
++  static nsTHashMap<int32_t, Touch::EmulatedFinger> sFingers;
++  return sFingers;
++}
++
+ /* static */
+ Touch::EmulatedFinger Touch::FingerFor(int32_t aIdentifier, bool aNewContact) {
+   MOZ_ASSERT(NS_IsMainThread());
+-  static nsTHashMap<int32_t, EmulatedFinger> sFingers;
++  auto& sFingers = Fingers();
+   const FingerRanges& r = Ranges();
+ 
+   if (!aNewContact) {
+@@ -336,4 +341,13 @@ Touch::EmulatedFinger Touch::FingerFor(int32_t aIdentifier, bool aNewContact) {
+   return finger;
+ }
+ 
++/* static */
++Touch::EmulatedFinger Touch::CurrentFinger(int32_t aIdentifier) {
++  MOZ_ASSERT(NS_IsMainThread());
++  if (auto finger = Fingers().Lookup(aIdentifier)) {
++    return finger.Data();
++  }
++  return FingerFor(aIdentifier, true);
++}
++
+ }  // namespace mozilla::dom
+diff --git a/dom/events/Touch.h b/dom/events/Touch.h
+index 722e0ca5ad..32a43b95d9 100644
+--- a/dom/events/Touch.h
++++ b/dom/events/Touch.h
+@@ -85,6 +85,10 @@ class Touch final : public nsISupports,
+   // pointerdown) puts a new finger down; later events for the same contact
+   // keep that finger, with the small wobble real contact geometry has.
+   static EmulatedFinger FingerFor(int32_t aIdentifier, bool aNewContact);
++  // The finger FingerFor last returned for aIdentifier, unchanged (a new one
++  // if there is none): for a second event of the same contact, such as the
++  // touch event that follows its pointer event.
++  static EmulatedFinger CurrentFinger(int32_t aIdentifier);
+ 
+   nsCOMPtr<EventTarget> mOriginalTarget;
+   nsCOMPtr<EventTarget> mTarget;

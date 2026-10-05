@@ -473,6 +473,8 @@ compatibility mouse events and the click follow as before.
 
 - `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
   - `dom/events/PointerEventHandler.cpp`: L26-29, L990-1082, L1483-1489
+  - `dom/events/Touch.cpp`: L305-309, L313, L344-352
+  - `dom/events/Touch.h`: L88-91
 - `tests/patches/android-touch-trusted.py`: new file, L1-94
 
 ## Task 19 - mediump at half precision
@@ -652,7 +654,7 @@ keys. OfflineAudioContext keeps the rate it is given.
 
 ## Fixes after the first build of all tasks together
 
-Tasks 0-28 were first compiled and tested together after they were merged. The fixes are follow-up commits, one per task (see the git log). Patches: each task's section above already points into the current patch. Other files, with the lines those fixes changed, as the files are now:
+Tasks 0-28 were first compiled and tested together after they were merged. The fixes are follow-up commits, one per task (see the git log). Patches: each task's section above already points into the current patch. Other files, with the lines those fixes changed, as the files were after the last fix (73be997):
 
 - `additions/camoucfg/DeviceProfiles.cpp`: L297
 - `tests/patches/android-api-stubs.py`: L13-16, L62, L87, L101-108, L110-112, L114-118
