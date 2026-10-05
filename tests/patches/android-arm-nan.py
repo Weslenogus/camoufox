@@ -17,7 +17,8 @@ wasm must produce ARM's NaN for f32/f64 add, sub, mul, div and sqrt in both of
 its compilers, and must still *propagate* an incoming NaN untouched, because ARM
 does too: canonicalizing every NaN would be its own tell.
 
-The control launch, without the profile, must still read the host CPU's value.
+The control launch, without the profile, must still read the host CPU's value
+(SpiderMonkey's own canonicalizing JIT paths aside, see expected_control_js).
 
 Run:
     python tests/patches/android-arm-nan.py [--binary /path/to/camoufox-bin]
@@ -158,6 +159,22 @@ def expected_js(nan_sign_byte: int) -> Dict[str, Any]:
     }
 
 
+def expected_control_js(nan_sign_byte: int) -> Dict[str, Any]:
+    """The emulation must not leak: the host's NaN still reaches every path.
+
+    SpiderMonkey itself stores the canonical NaN (ARM's 0x7FC00000) on some JIT
+    paths since Firefox 156 -- the inlined TypedArray.prototype.fill and one
+    DataView tier -- so the control asserts that the host value is still seen,
+    not that stock never canonicalizes."""
+    f32 = ARM_F32 if nan_sign_byte == 0x7F else X86_F32
+    host_pair = f"{nan_sign_byte},{nan_sign_byte}"
+    exact = ("set", "from", "of", "ctor", "mathSqrt", "mulZeroInf")
+    expected = expected_js(nan_sign_byte)
+    expected["dataView"] = lambda seen: host_pair in seen
+    expected["bulk"] = lambda bulk: all(bulk[k] == f32 for k in exact)
+    return expected
+
+
 def expected_wasm(arm: bool) -> Dict[str, Any]:
     f32 = ARM_F32 if arm else X86_F32
     f64hi = 0x7FF80000 if arm else 0xFFF80000
@@ -209,7 +226,7 @@ async def main(binary) -> bool:
 
     host = 0x7F if host_is_arm else 0xFF
     print(f"\n=== control (no profile): host CPU value {host:#x} ===")
-    ok &= compare(await probe(binary, {}, EAGER_JIT_PREFS, JS_PROBE), expected_js(host))
+    ok &= compare(await probe(binary, {}, EAGER_JIT_PREFS, JS_PROBE), expected_control_js(host))
     for tier, prefs in WASM_TIERS.items():
         print(f"\n=== control (no profile): {tier} ===")
         ok &= compare(await probe(binary, {}, prefs, WASM_PROBE), expected_wasm(host_is_arm))

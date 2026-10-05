@@ -505,8 +505,8 @@ class Backend(QObject):
         return self._pkg_version('playwright')
 
     @Property(str, notify=infoChanged)
-    def browserforgeVersion(self):
-        return self._pkg_version('browserforge')
+    def fpgenVersion(self):
+        return self._pkg_version('fpgen')
 
     @Property(str, notify=infoChanged)
     def fingerprintVersion(self):
@@ -861,7 +861,7 @@ class Backend(QObject):
 
         if source not in self._geoip_downloaded:
             return
-        save_geoip_config(_get_geoip_config_by_name(source))
+        save_geoip_config(_get_geoip_config_by_name(source), explicit=True)
         self._load_geoip()
 
     @Slot(int)

@@ -34,7 +34,7 @@ index 0000000000..7210dcef38
 +
 +#endif /* js_ArmNaN_h */
 diff --git a/js/src/builtin/DataViewObject.cpp b/js/src/builtin/DataViewObject.cpp
-index 7e2b4c265d..0fbc30ebac 100644
+index 4a779d656b..f7d452b566 100644
 --- a/js/src/builtin/DataViewObject.cpp
 +++ b/js/src/builtin/DataViewObject.cpp
 @@ -575,7 +575,7 @@ bool DataViewObject::write(JSContext* cx, Handle<DataViewObject*> obj,
@@ -47,10 +47,10 @@ index 7e2b4c265d..0fbc30ebac 100644
      }
    }
 diff --git a/js/src/jit/CacheIRCompiler.cpp b/js/src/jit/CacheIRCompiler.cpp
-index 4eb952e497..a48d942c35 100644
+index 721ac70ab4..52e6488af3 100644
 --- a/js/src/jit/CacheIRCompiler.cpp
 +++ b/js/src/jit/CacheIRCompiler.cpp
-@@ -7685,8 +7685,9 @@ bool CacheIRCompiler::emitStoreTypedArrayElement(ObjOperandId objId,
+@@ -7744,8 +7744,9 @@ bool CacheIRCompiler::emitStoreTypedArrayElement(ObjOperandId objId,
    } else if (Scalar::isFloatingType(elementType)) {
      Register temp = scratch2 ? scratch2->get() : InvalidReg;
  
@@ -62,7 +62,7 @@ index 4eb952e497..a48d942c35 100644
        masm.canonicalizeDoubleNaN(floatScratch0);
      }
  
-@@ -8213,8 +8214,9 @@ bool CacheIRCompiler::emitStoreDataViewValueResult(
+@@ -8272,8 +8273,9 @@ bool CacheIRCompiler::emitStoreDataViewValueResult(
    };
  #endif
  
@@ -75,7 +75,7 @@ index 4eb952e497..a48d942c35 100644
    }
  
 diff --git a/js/src/jit/TypePolicy.cpp b/js/src/jit/TypePolicy.cpp
-index fe5710f22a..38087fc7a4 100644
+index 6763651aed..f70faad5c0 100644
 --- a/js/src/jit/TypePolicy.cpp
 +++ b/js/src/jit/TypePolicy.cpp
 @@ -945,8 +945,9 @@ bool StoreUnboxedScalarPolicy::adjustValueInput(TempAllocator& alloc,
@@ -91,7 +91,7 @@ index fe5710f22a..38087fc7a4 100644
      ins->block()->insertBefore(ins, value->toInstruction());
    }
 diff --git a/js/src/jsapi.cpp b/js/src/jsapi.cpp
-index b93285b7f8..1c43df1f77 100644
+index 5ce789e349..cf1c2f0d2e 100644
 --- a/js/src/jsapi.cpp
 +++ b/js/src/jsapi.cpp
 @@ -38,6 +38,7 @@
@@ -102,7 +102,7 @@ index b93285b7f8..1c43df1f77 100644
  #include "js/CallAndConstruct.h"  // JS::IsCallable
  #include "js/CharacterEncoding.h"
  #include "js/ColumnNumber.h"  // JS::TaggedColumnNumberOneOrigin, JS::ColumnNumberOneOrigin
-@@ -5123,6 +5124,8 @@ JS_PUBLIC_API void NoteIntentionalCrash() {
+@@ -5167,6 +5168,8 @@ JS_PUBLIC_API void NoteIntentionalCrash() {
  bool gSupportDifferentialTesting = false;
  #endif  // DEBUG
  
@@ -111,7 +111,7 @@ index b93285b7f8..1c43df1f77 100644
  }  // namespace js
  
  #ifdef DEBUG
-@@ -5132,3 +5135,7 @@ JS_PUBLIC_API void JS::SetSupportDifferentialTesting(bool value) {
+@@ -5176,3 +5179,7 @@ JS_PUBLIC_API void JS::SetSupportDifferentialTesting(bool value) {
  }
  
  #endif  // DEBUG
@@ -120,7 +120,7 @@ index b93285b7f8..1c43df1f77 100644
 +  js::gUseArmDefaultNaN = value;
 +}
 diff --git a/js/src/moz.build b/js/src/moz.build
-index a926eaffb4..d433899af7 100644
+index 81a49f7694..947a5abd15 100644
 --- a/js/src/moz.build
 +++ b/js/src/moz.build
 @@ -99,6 +99,7 @@ EXPORTS.js += [
@@ -185,10 +185,10 @@ index 2702836452..06539a42bc 100644
        }
      }
 diff --git a/js/src/vm/TypedArrayObject.cpp b/js/src/vm/TypedArrayObject.cpp
-index 88aab20a67..a2e3306dec 100644
+index 3cf414d3cd..ae83724cbc 100644
 --- a/js/src/vm/TypedArrayObject.cpp
 +++ b/js/src/vm/TypedArrayObject.cpp
-@@ -1270,7 +1270,7 @@ bool TypedArrayObjectTemplate<NativeType>::convertValue(JSContext* cx,
+@@ -1272,7 +1272,7 @@ bool TypedArrayObjectTemplate<NativeType>::convertValue(JSContext* cx,
    }
  
    if constexpr (!std::numeric_limits<NativeType>::is_integer) {
@@ -197,7 +197,7 @@ index 88aab20a67..a2e3306dec 100644
        // See the comment in ElementSpecific::doubleToNative.
        d = JS::CanonicalizeNaN(d);
      }
-@@ -3111,7 +3111,7 @@ static NativeType ConvertToNativeType(const Value& value) {
+@@ -3113,7 +3113,7 @@ static NativeType ConvertToNativeType(const Value& value) {
    if constexpr (!std::numeric_limits<NativeType>::is_integer) {
      double d = value.toNumber();
  
@@ -206,7 +206,7 @@ index 88aab20a67..a2e3306dec 100644
        // See the comment in ElementSpecific::doubleToNative.
        d = JS::CanonicalizeNaN(d);
      }
-@@ -3947,7 +3947,7 @@ template <typename NativeType>
+@@ -3949,7 +3949,7 @@ template <typename NativeType>
  static void TypedArraySliceCopySlowSet(TypedArrayObject* tarray, size_t index,
                                         double value) {
    if constexpr (!std::numeric_limits<NativeType>::is_integer) {
@@ -216,7 +216,7 @@ index 88aab20a67..a2e3306dec 100644
        value = JS::CanonicalizeNaN(value);
      }
 diff --git a/js/src/wasm/WasmBaselineCompile.cpp b/js/src/wasm/WasmBaselineCompile.cpp
-index 2af7ad7f58..28f06ffaa0 100644
+index bf42791513..5415dac70e 100644
 --- a/js/src/wasm/WasmBaselineCompile.cpp
 +++ b/js/src/wasm/WasmBaselineCompile.cpp
 @@ -141,6 +141,8 @@
@@ -228,7 +228,7 @@ index 2af7ad7f58..28f06ffaa0 100644
  #include "wasm/WasmAnyRef.h"
  #include "wasm/WasmBCClass.h"
  #include "wasm/WasmBCDefs.h"
-@@ -3005,20 +3007,59 @@ static void EqzI64(MacroAssembler& masm, RegI64 rs, RegI32 rd) {
+@@ -3018,20 +3020,59 @@ static void EqzI64(MacroAssembler& masm, RegI64 rs, RegI32 rd) {
  #endif
  }
  
@@ -292,7 +292,7 @@ index 2af7ad7f58..28f06ffaa0 100644
  }
  
  static void MinF64(BaseCompiler& bc, RegF64 rs, RegF64 rsd) {
-@@ -3068,23 +3109,23 @@ static void NegateF64(MacroAssembler& masm, RegF64 rsd) {
+@@ -3081,23 +3122,23 @@ static void NegateF64(MacroAssembler& masm, RegF64 rsd) {
  }
  
  static void SqrtF64(MacroAssembler& masm, RegF64 rsd) {
@@ -321,7 +321,7 @@ index 2af7ad7f58..28f06ffaa0 100644
  }
  
  static void MinF32(BaseCompiler& bc, RegF32 rs, RegF32 rsd) {
-@@ -3135,7 +3176,7 @@ static void NegateF32(MacroAssembler& masm, RegF32 rsd) {
+@@ -3148,7 +3189,7 @@ static void NegateF32(MacroAssembler& masm, RegF32 rsd) {
  }
  
  static void SqrtF32(MacroAssembler& masm, RegF32 rsd) {
@@ -331,12 +331,12 @@ index 2af7ad7f58..28f06ffaa0 100644
  
  #ifndef RABALDR_I64_TO_FLOAT_CALLOUT
 diff --git a/js/src/wasm/WasmIonCompile.cpp b/js/src/wasm/WasmIonCompile.cpp
-index 9c79b9cf07..3d61404969 100644
+index ef619eee98..f43bcfb097 100644
 --- a/js/src/wasm/WasmIonCompile.cpp
 +++ b/js/src/wasm/WasmIonCompile.cpp
-@@ -906,6 +906,44 @@ class FunctionCompiler {
-     return IsFloatingPointType(type) && !codeMeta().isAsmJS();
-   }
+@@ -893,6 +893,44 @@ class FunctionCompiler {
+ 
+   bool mustPreserveNaN(MIRType type) { return IsFloatingPointType(type); }
  
 +  // Camoufox: ARM default NaN (see js::UseArmDefaultNaN). `result` was
 +  // computed from `lhs` and, for a binary op, `rhs`. A NaN operand propagates
@@ -379,28 +379,33 @@ index 9c79b9cf07..3d61404969 100644
    MDefinition* sub(MDefinition* lhs, MDefinition* rhs, MIRType type) {
      if (inDeadCode()) {
        return nullptr;
-@@ -1507,9 +1545,9 @@ class FunctionCompiler {
-                                     MDefinition* value) {
-     MOZ_ASSERT(codeMeta().isAsmJS());
- 
--    // Canonicalize floating point values for differential testing.
--    if (Scalar::isFloatingType(accessType) &&
--        js::SupportDifferentialTesting()) {
-+    // Canonicalize floating point values for differential testing and for
-+    // ARM NaN emulation (see js::CanonicalizeStoredNaN).
-+    if (Scalar::isFloatingType(accessType) && js::CanonicalizeStoredNaN()) {
-       auto* canonicalize = MCanonicalizeNaN::New(alloc(), value);
-       curBlock_->add(canonicalize);
-       return canonicalize;
-@@ -5946,6 +5984,7 @@ class FunctionCompiler {
-   bool emitConversion(ValType operandType, ValType resultType);
-   template <typename MIRClass>
-   bool emitUnaryWithType(ValType operandType, MIRType mirType);
+@@ -5933,6 +5971,7 @@ class FunctionCompiler {
+   bool emitArrayInitData();
+   bool emitArrayInitElem();
+   bool emitArraySet();
 +  bool emitSqrt(ValType operandType, MIRType mirType);
-   template <typename MIRClass>
-   bool emitConversionWithType(ValType operandType, ValType resultType,
-                               MIRType mirType);
-@@ -6870,6 +6909,16 @@ bool FunctionCompiler::emitUnaryWithType(ValType operandType, MIRType mirType) {
+   bool emitArrayGet(FieldWideningOp wideningOp);
+   bool emitArrayLen();
+   bool emitArrayCopy();
+@@ -6787,7 +6826,7 @@ bool FunctionCompiler::emitAdd(ValType type, MIRType mirType) {
+     return false;
+   }
+ 
+-  iter().setResult(add(lhs, rhs, mirType));
++  iter().setResult(armDefaultNaN(add(lhs, rhs, mirType), lhs, rhs));
+   return true;
+ }
+ 
+@@ -6798,7 +6837,7 @@ bool FunctionCompiler::emitSub(ValType type, MIRType mirType) {
+     return false;
+   }
+ 
+-  iter().setResult(sub(lhs, rhs, mirType));
++  iter().setResult(armDefaultNaN(sub(lhs, rhs, mirType), lhs, rhs));
+   return true;
+ }
+ 
+@@ -6827,6 +6866,16 @@ bool FunctionCompiler::emitBitwiseAndOrXor(
    return true;
  }
  
@@ -415,27 +420,9 @@ index 9c79b9cf07..3d61404969 100644
 +}
 +
  template <typename MIRClass>
- bool FunctionCompiler::emitConversionWithType(ValType operandType,
-                                               ValType resultType,
-@@ -6987,7 +7036,7 @@ bool FunctionCompiler::emitAdd(ValType type, MIRType mirType) {
-     return false;
-   }
- 
--  iter().setResult(add(lhs, rhs, mirType));
-+  iter().setResult(armDefaultNaN(add(lhs, rhs, mirType), lhs, rhs));
-   return true;
- }
- 
-@@ -6998,7 +7047,7 @@ bool FunctionCompiler::emitSub(ValType type, MIRType mirType) {
-     return false;
-   }
- 
--  iter().setResult(sub(lhs, rhs, mirType));
-+  iter().setResult(armDefaultNaN(sub(lhs, rhs, mirType), lhs, rhs));
-   return true;
- }
- 
-@@ -7067,9 +7116,10 @@ bool FunctionCompiler::emitMul(ValType operandType, MIRType mirType) {
+ bool FunctionCompiler::emitShift(ValType operandType, MIRType mirType) {
+   MDefinition* lhs;
+@@ -6857,9 +6906,10 @@ bool FunctionCompiler::emitMul(ValType operandType, MIRType mirType) {
      return false;
    }
  
@@ -448,7 +435,7 @@ index 9c79b9cf07..3d61404969 100644
    return true;
  }
  
-@@ -7081,7 +7131,7 @@ bool FunctionCompiler::emitDiv(ValType operandType, MIRType mirType,
+@@ -6871,7 +6921,7 @@ bool FunctionCompiler::emitDiv(ValType operandType, MIRType mirType,
      return false;
    }
  
@@ -457,7 +444,7 @@ index 9c79b9cf07..3d61404969 100644
    return true;
  }
  
-@@ -10341,7 +10391,7 @@ bool FunctionCompiler::emitBodyExprs() {
+@@ -10175,7 +10225,7 @@ bool FunctionCompiler::emitBodyExprs() {
        case uint16_t(Op::F32Nearest):
          CHECK(emitUnaryMathBuiltinCall(SASigNearbyIntF));
        case uint16_t(Op::F32Sqrt):
@@ -466,7 +453,7 @@ index 9c79b9cf07..3d61404969 100644
        case uint16_t(Op::F32Add):
          CHECK(emitAdd(ValType::F32, MIRType::Float32));
        case uint16_t(Op::F32Sub):
-@@ -10370,7 +10420,7 @@ bool FunctionCompiler::emitBodyExprs() {
+@@ -10204,7 +10254,7 @@ bool FunctionCompiler::emitBodyExprs() {
        case uint16_t(Op::F64Nearest):
          CHECK(emitUnaryMathBuiltinCall(SASigNearbyIntD));
        case uint16_t(Op::F64Sqrt):
@@ -476,10 +463,10 @@ index 9c79b9cf07..3d61404969 100644
          CHECK(emitAdd(ValType::F64, MIRType::Double));
        case uint16_t(Op::F64Sub):
 diff --git a/js/src/wasm/WasmModule.cpp b/js/src/wasm/WasmModule.cpp
-index 95ea453508..52aec59db4 100644
+index d83eea582a..18ddd21c2c 100644
 --- a/js/src/wasm/WasmModule.cpp
 +++ b/js/src/wasm/WasmModule.cpp
-@@ -247,7 +247,7 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
+@@ -240,7 +240,7 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
    uint32_t cpu = ObservedCPUFeatures();
  
    if (!buildId->reserve(buildId->length() +
@@ -488,7 +475,7 @@ index 95ea453508..52aec59db4 100644
      return false;
    }
  
-@@ -266,6 +266,12 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
+@@ -259,6 +259,12 @@ bool wasm::GetOptimizedEncodingBuildId(JS::BuildIdCharVector* buildId) {
        wasm::IsHugeMemoryEnabled(AddressType::I64, PageSize::Standard) ? '+'
                                                                        : '-');
  
@@ -502,20 +489,20 @@ index 95ea453508..52aec59db4 100644
  #ifdef ENABLE_WASM_CUSTOM_PAGE_SIZES
    MOZ_RELEASE_ASSERT(
 diff --git a/js/xpconnect/src/XPCJSContext.cpp b/js/xpconnect/src/XPCJSContext.cpp
-index b74f9a8392..01bdf8f76e 100644
+index ce98ab5261..81037e6ea4 100644
 --- a/js/xpconnect/src/XPCJSContext.cpp
 +++ b/js/xpconnect/src/XPCJSContext.cpp
 @@ -6,6 +6,9 @@
  
- #include "mozilla/UniquePtr.h"
- 
+ #include "mozilla/AppShutdown.h"
+ #include "mozilla/MemoryTelemetry.h"
 +#include "MaskConfig.hpp"
 +#include "js/ArmNaN.h"
 +
- #include "xpcprivate.h"
- #include "xpcpublic.h"
- #include "XPCWrapper.h"
-@@ -1235,6 +1238,13 @@ static JS::LoggingInterface loggingInterface = {GetLoggerByName, LogPrintVA,
+ #include "mozilla/Preferences.h"
+ #include "mozilla/Services.h"
+ #include "mozilla/UniquePtr.h"
+@@ -1239,6 +1242,13 @@ static JS::LoggingInterface loggingInterface = {GetLoggerByName, LogPrintVA,
                                                  LogPrintFMT, GetLevelRef};
  
  nsresult XPCJSContext::Initialize() {

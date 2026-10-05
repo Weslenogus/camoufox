@@ -24,10 +24,10 @@ index 0ebf2de60f..0b18c825c9 100644
 +        "android/Roboto-Regular.ttf",
 +    ]
 diff --git a/gfx/thebes/gfxPlatformFontList.cpp b/gfx/thebes/gfxPlatformFontList.cpp
-index 55dfb7cf9b..3f967acc44 100644
+index 518a7fe1d6..75f92944e9 100644
 --- a/gfx/thebes/gfxPlatformFontList.cpp
 +++ b/gfx/thebes/gfxPlatformFontList.cpp
-@@ -2308,6 +2308,11 @@ static void GetSystemUIFontFamilies(
+@@ -2307,6 +2307,11 @@ static void GetSystemUIFontFamilies(
    // serif font (daijro/camoufox#695). A null provider means there is no
    // document behind the lookup, where spoofing is the safe default.
    if (!(aFontVisibilityProvider && aFontVisibilityProvider->IsChrome())) {
@@ -37,33 +37,34 @@ index 55dfb7cf9b..3f967acc44 100644
 +      return;
 +    }
      if (auto platform = MaskConfig::GetString("navigator.platform"); platform) {
-       if (*platform == "MacIntel") {
-         *aFamilies.AppendElement() = "Helvetica"_ns;
+       // A native identity (the host's own OS) keeps the real system font:
+       // on macOS that is -apple-system (SF Pro), which Helvetica does not
 diff --git a/layout/base/nsLayoutUtils.cpp b/layout/base/nsLayoutUtils.cpp
-index 611015d223..1d4f9f62ba 100644
+index 136e0e1f93..19ee24cf6f 100644
 --- a/layout/base/nsLayoutUtils.cpp
 +++ b/layout/base/nsLayoutUtils.cpp
-@@ -9768,8 +9768,9 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+@@ -9842,8 +9842,9 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
    // and uses probe duration as a probabilistic headless signal.
    // navigator.platform is set from CAMOU_CONFIG at process start and never
    // changes, so a single lookup per process is safe.
--  enum class SpoofedOS { Other, Mac, Win };
-+  enum class SpoofedOS { Other, Mac, Win, Android };
+-  enum class SpoofedOS { Other, Mac, Win, Linux };
++  enum class SpoofedOS { Other, Mac, Win, Linux, Android };
    static const SpoofedOS sSpoofedOS = []() {
 +    if (MaskConfig::IsAndroidDevice()) return SpoofedOS::Android;
      auto platform = MaskConfig::GetString("navigator.platform");
      if (!platform) return SpoofedOS::Other;
      const std::string& p = platform.value();
-@@ -9796,6 +9797,12 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
-     aStyle.size = 12;
-     return;
-   }
+@@ -9866,6 +9867,13 @@ static void GetSpoofedSystemFontForRFP(LookAndFeel::FontID aFontID,
+   // FontFamilyList::is_system_font, and without it canvas's font setter
+   // overrides the size and cannot serialize the value, so
+   // `ctx.font = "caption"` was silently ignored ("10px sans-serif").
 +  if (sSpoofedOS == SpoofedOS::Android) {
 +    // What Gecko's own Android build uses (nsLookAndFeel::NativeGetFont).
 +    aName = u"Roboto"_ns;
 +    aStyle.size = 12;
++    aStyle.systemFont = true;
 +    return;
 +  }
-   // Linux / iPhone / unspoofed: fall through to upstream behavior.
- 
- #if defined(XP_MACOSX) || defined(MOZ_WIDGET_UIKIT)
+   if (sSpoofedOS == SpoofedOS::Mac) {
+     // Same per-keyword table as a real macOS (see the XP_MACOSX branch below).
+     aName = u"-apple-system"_ns;

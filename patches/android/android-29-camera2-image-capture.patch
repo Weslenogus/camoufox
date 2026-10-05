@@ -1504,7 +1504,7 @@ index c79859b8de..a71c0debc0 100644
 +
  }  // namespace mozilla
 diff --git a/dom/media/MediaDevices.cpp b/dom/media/MediaDevices.cpp
-index aba06b0a39..33b8c2db73 100644
+index bd93c891d7..d80abec838 100644
 --- a/dom/media/MediaDevices.cpp
 +++ b/dom/media/MediaDevices.cpp
 @@ -17,6 +17,7 @@
@@ -1596,10 +1596,10 @@ index aba06b0a39..33b8c2db73 100644
      aResult.mResizeMode.Construct(true);
    }
 diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
-index 29c4a816c8..ef8981ba62 100644
+index a3328a12a7..9fa149dc90 100644
 --- a/dom/media/MediaManager.cpp
 +++ b/dom/media/MediaManager.cpp
-@@ -871,6 +871,11 @@ class LocalTrackSource : public MediaStreamTrackSource {
+@@ -872,6 +872,11 @@ class LocalTrackSource : public MediaStreamTrackSource {
      }
    }
  
@@ -1611,7 +1611,7 @@ index 29c4a816c8..ef8981ba62 100644
    void GetCapabilities(MediaTrackCapabilities& aOutCapabilities) override {
      if (mListener) {
        mListener->GetCapabilities(aOutCapabilities);
-@@ -1175,6 +1180,21 @@ void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
+@@ -1176,6 +1181,21 @@ void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
        Kind() == MediaDeviceKind::Videoinput) {
      AndroidMediaDevices::AddSettings(mRawDevice->mRawName, aOutSettings);
    }
@@ -1633,7 +1633,7 @@ index 29c4a816c8..ef8981ba62 100644
  }
  
  void LocalMediaDevice::GetCapabilities(
-@@ -1313,6 +1333,8 @@ already_AddRefed<LocalMediaDevice> LocalMediaDevice::Clone() const {
+@@ -1320,6 +1340,8 @@ already_AddRefed<LocalMediaDevice> LocalMediaDevice::Clone() const {
    auto device = MakeRefPtr<LocalMediaDevice>(mRawDevice, mID, mGroupID, mName);
    device->mSource =
        mRawDevice->mEngine->CreateSourceFrom(mSource, device->mRawDevice);
@@ -1642,7 +1642,7 @@ index 29c4a816c8..ef8981ba62 100644
  #ifdef MOZ_THREAD_SAFETY_OWNERSHIP_CHECKS_SUPPORTED
    // The source is normally created on the MediaManager thread. But for cloning,
    // it ends up being created on main thread. Make sure its owning event target
-@@ -1820,6 +1842,9 @@ void GetUserMediaStreamTask::PrepareDOMStream() {
+@@ -1827,6 +1849,9 @@ void GetUserMediaStreamTask::PrepareDOMStream() {
          window, track, videoTrackSource, dom::MediaStreamTrackState::Live,
          false, GetInvariant(mConstraints.mVideo));
      domStream->AddTrackInternal(domTrack);
@@ -1653,7 +1653,7 @@ index 29c4a816c8..ef8981ba62 100644
        case MediaSourceEnum::Browser:
        case MediaSourceEnum::Screen:
 diff --git a/dom/media/MediaManager.h b/dom/media/MediaManager.h
-index 3dac2943b3..f994c28486 100644
+index 8f6b3f363d..1f85ff09d9 100644
 --- a/dom/media/MediaManager.h
 +++ b/dom/media/MediaManager.h
 @@ -9,6 +9,7 @@
@@ -1664,8 +1664,8 @@ index 3dac2943b3..f994c28486 100644
  #include "mozilla/Attributes.h"
  #include "mozilla/Logging.h"
  #include "mozilla/Preferences.h"
-@@ -168,6 +169,9 @@ class LocalMediaDevice final : public nsIMediaDevice {
-   bool IsFake() const { return mRawDevice->mIsFake; }
+@@ -170,6 +171,9 @@ class LocalMediaDevice final : public nsIMediaDevice {
+   bool IsIdentityDevice() const;
    const nsString& RawID() { return mRawDevice->mRawID; }
    const dom::MediaTrackConstraints& Constraints() const;
 +  // Camoufox: the Image Capture controls of an Android device profile's
@@ -1674,7 +1674,7 @@ index 3dac2943b3..f994c28486 100644
  
   private:
    virtual ~LocalMediaDevice() = default;
-@@ -192,6 +196,8 @@ class LocalMediaDevice final : public nsIMediaDevice {
+@@ -194,6 +198,8 @@ class LocalMediaDevice final : public nsIMediaDevice {
    RefPtr<MediaEngineSource> mSource;
    // Currently applied constraints. Media thread only.
    dom::MediaTrackConstraints mConstraints;
@@ -1684,7 +1684,7 @@ index 3dac2943b3..f994c28486 100644
  
  typedef nsRefPtrHashtable<nsUint64HashKey, GetUserMediaWindowListener>
 diff --git a/dom/media/MediaStreamTrack.cpp b/dom/media/MediaStreamTrack.cpp
-index e51efceac0..17d5e10fc4 100644
+index fa844af2ac..eea1853979 100644
 --- a/dom/media/MediaStreamTrack.cpp
 +++ b/dom/media/MediaStreamTrack.cpp
 @@ -9,7 +9,11 @@
@@ -1699,7 +1699,7 @@ index e51efceac0..17d5e10fc4 100644
  #include "mozilla/dom/Promise.h"
  #include "nsContentUtils.h"
  #include "nsGlobalWindowInner.h"
-@@ -318,6 +322,9 @@ void MediaStreamTrack::GetCapabilities(MediaTrackCapabilities& aResult,
+@@ -320,6 +324,9 @@ void MediaStreamTrack::GetCapabilities(MediaTrackCapabilities& aResult,
  
  void MediaStreamTrack::GetConstraints(dom::MediaTrackConstraints& aResult) {
    aResult = mConstraints;
@@ -1709,7 +1709,7 @@ index e51efceac0..17d5e10fc4 100644
  }
  
  void MediaStreamTrack::GetSettings(dom::MediaTrackSettings& aResult,
-@@ -355,6 +362,43 @@ already_AddRefed<Promise> MediaStreamTrack::ApplyConstraints(
+@@ -357,6 +364,43 @@ already_AddRefed<Promise> MediaStreamTrack::ApplyConstraints(
      return nullptr;
    }
  
@@ -1778,7 +1778,7 @@ index fc1700b615..a6f7ef65b0 100644
     * Called by the source interface when all registered sinks with
     * KeepsSourceAlive() == true have unregistered.
 diff --git a/dom/media/imagecapture/CaptureTask.cpp b/dom/media/imagecapture/CaptureTask.cpp
-index 11c1a5b473..197ee34100 100644
+index bfafd47b94..b5deefc4da 100644
 --- a/dom/media/imagecapture/CaptureTask.cpp
 +++ b/dom/media/imagecapture/CaptureTask.cpp
 @@ -1,18 +1,14 @@
@@ -1891,7 +1891,7 @@ index 11c1a5b473..197ee34100 100644
  }
  
  void CaptureTask::PrincipalChanged(dom::MediaStreamTrack* aMediaStreamTrack) {
-@@ -104,94 +65,35 @@ void CaptureTask::NotifyRealtimeTrackData(MediaTrackGraph* aGraph,
+@@ -104,39 +65,12 @@ void CaptureTask::NotifyRealtimeTrackData(MediaTrackGraph* aGraph,
    MOZ_ASSERT(aMedia.GetType() == MediaSegment::VIDEO);
    const VideoSegment& video = static_cast<const VideoSegment&>(aMedia);
  
@@ -1930,9 +1930,8 @@ index 11c1a5b473..197ee34100 100644
 -
      RefPtr<layers::Image> image;
      if (chunk.mFrame.GetForceBlack()) {
--      // Create a black image.
-       image = VideoFrame::CreateBlackImage(chunk.mFrame.GetIntrinsicSize());
-     } else {
+       image = chunk.mFrame.CloneAsBlackImage();
+@@ -144,53 +78,22 @@ void CaptureTask::NotifyRealtimeTrackData(MediaTrackGraph* aGraph,
        image = chunk.mFrame.GetImage();
      }
      if (!image) {
@@ -2517,7 +2516,7 @@ index a5e21c9f11..cd1b0799c9 100644
 -}  // namespace mozilla
 +}  // namespace mozilla::dom
 diff --git a/dom/media/imagecapture/ImageCapture.h b/dom/media/imagecapture/ImageCapture.h
-index 359eb850ea..b26d580881 100644
+index bbe4b43fd7..b26d580881 100644
 --- a/dom/media/imagecapture/ImageCapture.h
 +++ b/dom/media/imagecapture/ImageCapture.h
 @@ -1,3 +1,5 @@
@@ -2546,7 +2545,7 @@ index 359eb850ea..b26d580881 100644
 -#ifndef IC_LOG
 -LogModule* GetICLog();
 -#  define IC_LOG(...) \
--    MOZ_LOG(GetICLog(), mozilla::LogLevel::Debug, (__VA_ARGS__))
+-    MOZ_LOG_FMT(GetICLog(), mozilla::LogLevel::Debug, __VA_ARGS__)
 -#endif
 +class AndroidCameraControls;
 +class ErrorResult;
@@ -2657,10 +2656,10 @@ index 359eb850ea..b26d580881 100644
  
  }  // namespace dom
 diff --git a/dom/media/moz.build b/dom/media/moz.build
-index 2909f24d46..8059070eee 100644
+index d343bacff8..bd3b179c54 100644
 --- a/dom/media/moz.build
 +++ b/dom/media/moz.build
-@@ -223,6 +223,7 @@ EXPORTS += [
+@@ -225,6 +225,7 @@ EXPORTS += [
  ]
  
  EXPORTS.mozilla += [
@@ -2858,10 +2857,10 @@ index f1a68d1ed6..bf2ae002e7 100644
  }  // namespace mozilla
  
 diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
-index 6b96366275..d9ac38d2c5 100644
+index 93cbdf9759..c600384de6 100644
 --- a/dom/media/webrtc/MediaEngineFake.cpp
 +++ b/dom/media/webrtc/MediaEngineFake.cpp
-@@ -277,7 +277,7 @@ nsresult MediaEngineFakeVideoSource::Allocate(
+@@ -280,7 +280,7 @@ nsresult MediaEngineFakeVideoSource::Allocate(
    mOpts.mFPS = std::clamp(mOpts.mFPS, 0, MediaEnginePrefs::DEFAULT_VIDEO_FPS);
  
    nsCOMPtr<nsISerialEventTarget> target = GetCurrentSerialEventTarget();

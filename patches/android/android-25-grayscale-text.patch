@@ -1,8 +1,8 @@
 diff --git a/gfx/thebes/gfxFcPlatformFontList.cpp b/gfx/thebes/gfxFcPlatformFontList.cpp
-index ae1f700d2c..16bf36cf53 100644
+index b787a840fd..50e21ffc81 100644
 --- a/gfx/thebes/gfxFcPlatformFontList.cpp
 +++ b/gfx/thebes/gfxFcPlatformFontList.cpp
-@@ -986,6 +986,14 @@ gfxFont* gfxFontconfigFontEntry::CreateFontInstance(
+@@ -1078,6 +1078,14 @@ gfxFont* gfxFontconfigFontEntry::CreateFontInstance(
      FcPatternAddBool(renderPattern, FC_HINTING, FcFalse);
    }
  

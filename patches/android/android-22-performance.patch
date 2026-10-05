@@ -165,7 +165,7 @@ index 0000000000..9a9d25dedb
 +
 +#endif  // mozilla_dom_MemoryInfo_h
 diff --git a/dom/performance/Performance.cpp b/dom/performance/Performance.cpp
-index 3754154ae9..a9e9b185e7 100644
+index 1a01ab1ee1..59e79f749c 100644
 --- a/dom/performance/Performance.cpp
 +++ b/dom/performance/Performance.cpp
 @@ -4,6 +4,8 @@
@@ -177,7 +177,7 @@ index 3754154ae9..a9e9b185e7 100644
  #include <sstream>
  
  #if defined(XP_LINUX)
-@@ -155,6 +157,10 @@ DOMHighResTimeStamp Performance::NowUnclamped() const {
+@@ -163,6 +165,10 @@ DOMHighResTimeStamp Performance::NowUnclamped() const {
    return duration.ToMilliseconds();
  }
  
@@ -189,7 +189,7 @@ index 3754154ae9..a9e9b185e7 100644
    if (!mPerformanceService) {
      mPerformanceService = PerformanceService::GetOrCreate();
 diff --git a/dom/performance/Performance.h b/dom/performance/Performance.h
-index 29d68c84a3..67ca1cb66e 100644
+index 319c2ec7ad..f8b2bc6475 100644
 --- a/dom/performance/Performance.h
 +++ b/dom/performance/Performance.h
 @@ -23,6 +23,7 @@ namespace dom {
@@ -211,7 +211,7 @@ index 29d68c84a3..67ca1cb66e 100644
        JSContext* aCx, const nsAString& aName,
        const PerformanceMarkOptions& aMarkOptions, ErrorResult& aRv);
 diff --git a/dom/performance/moz.build b/dom/performance/moz.build
-index ae626380db..c5d4eb1d58 100644
+index 6773823fe4..57f64c6e35 100644
 --- a/dom/performance/moz.build
 +++ b/dom/performance/moz.build
 @@ -9,6 +9,7 @@ EXPORTS.mozilla.dom += [
@@ -220,17 +220,17 @@ index ae626380db..c5d4eb1d58 100644
      "LargestContentfulPaint.h",
 +    "MemoryInfo.h",
      "Performance.h",
+     "PerformanceContainerTiming.h",
      "PerformanceEntry.h",
-     "PerformanceEventTiming.h",
-@@ -34,6 +35,7 @@ EXPORTS.mozilla.dom += [
+@@ -35,6 +36,7 @@ EXPORTS.mozilla.dom += [
  UNIFIED_SOURCES += [
      "EventCounts.cpp",
      "LargestContentfulPaint.cpp",
 +    "MemoryInfo.cpp",
      "Performance.cpp",
+     "PerformanceContainerTiming.cpp",
      "PerformanceEntry.cpp",
-     "PerformanceEventTiming.cpp",
-@@ -65,3 +67,6 @@ MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
+@@ -67,3 +69,6 @@ MOCHITEST_MANIFESTS += ["tests/mochitest.toml"]
  include("/ipc/chromium/chromium-config.mozbuild")
  
  FINAL_LIBRARY = "xul"

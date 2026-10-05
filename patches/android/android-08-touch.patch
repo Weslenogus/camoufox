@@ -1,8 +1,8 @@
 diff --git a/dom/base/nsContentUtils.cpp b/dom/base/nsContentUtils.cpp
-index 23c52ffea1..16b7a2625c 100644
+index 67eb1287f3..196a74df31 100644
 --- a/dom/base/nsContentUtils.cpp
 +++ b/dom/base/nsContentUtils.cpp
-@@ -10019,10 +10019,27 @@ mozilla::Result<bool, nsresult> nsContentUtils::SynthesizeTouchEvent(
+@@ -10647,10 +10647,27 @@ mozilla::Result<bool, nsresult> nsContentUtils::SynthesizeTouchEvent(
      float pressure = aTouches[i].mPressure.WasPassed()
                           ? aTouches[i].mPressure.Value()
                           : (msg == eTouchEnd ? 0.0f : 0.5f);
@@ -33,10 +33,10 @@ index 23c52ffea1..16b7a2625c 100644
        MOZ_ASSERT(aTouches[i].mAzimuthAngle.WasPassed());
        t->mAngle.emplace(aTouches[i].mAltitudeAngle.Value(),
 diff --git a/dom/events/EventStateManager.cpp b/dom/events/EventStateManager.cpp
-index 4fe9337e86..df93ea09ca 100644
+index 881b2b4140..d65712d83c 100644
 --- a/dom/events/EventStateManager.cpp
 +++ b/dom/events/EventStateManager.cpp
-@@ -70,6 +70,7 @@
+@@ -72,6 +72,7 @@
  #include "mozilla/dom/PopoverData.h"
  #include "mozilla/dom/Record.h"
  #include "mozilla/dom/Selection.h"
@@ -44,7 +44,7 @@ index 4fe9337e86..df93ea09ca 100644
  #include "mozilla/dom/UIEvent.h"
  #include "mozilla/dom/UIEventBinding.h"
  #include "mozilla/dom/UserActivation.h"
-@@ -6251,6 +6252,12 @@ nsresult EventStateManager::InitAndDispatchClickEvent(
+@@ -6423,6 +6424,12 @@ nsresult EventStateManager::InitAndDispatchClickEvent(
    mouseOrPointerEvent.mButton = aMouseUpEvent->mButton;
    mouseOrPointerEvent.pointerId = aMouseUpEvent->pointerId;
    mouseOrPointerEvent.mInputSource = aMouseUpEvent->mInputSource;
@@ -83,7 +83,7 @@ index 37a8875d71..249f3a7b4f 100644
      return inputSource;
    }
 diff --git a/dom/events/PointerEventHandler.cpp b/dom/events/PointerEventHandler.cpp
-index 681a9e1bac..918f8ef045 100644
+index 4e7f31c852..b12262169f 100644
 --- a/dom/events/PointerEventHandler.cpp
 +++ b/dom/events/PointerEventHandler.cpp
 @@ -23,6 +23,8 @@
@@ -95,7 +95,7 @@ index 681a9e1bac..918f8ef045 100644
  namespace mozilla {
  // MouseLocation logs the mouse location and when/where enqueued synthesized
  // mouse move is flushed.  If you don't need all mouse location recording at
-@@ -977,6 +979,10 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
+@@ -1036,6 +1038,10 @@ void PointerEventHandler::PostHandlePointerEventsPreventDefault(
    pointerInfo->mPreventMouseEventByContent = true;
  }
  
@@ -106,7 +106,7 @@ index 681a9e1bac..918f8ef045 100644
  /* static */
  void PointerEventHandler::InitPointerEventFromMouse(
      WidgetPointerEvent* aPointerEvent, const WidgetMouseEvent* aMouseEvent,
-@@ -992,6 +998,22 @@ void PointerEventHandler::InitPointerEventFromMouse(
+@@ -1051,6 +1057,22 @@ void PointerEventHandler::InitPointerEventFromMouse(
  
    aPointerEvent->mButtons = aMouseEvent->mButtons;
    aPointerEvent->mPressure = aMouseEvent->ComputeMouseButtonPressure();
@@ -129,7 +129,7 @@ index 681a9e1bac..918f8ef045 100644
  }
  
  /* static */
-@@ -1034,6 +1056,13 @@ void PointerEventHandler::InitPointerEventFromTouch(
+@@ -1093,6 +1115,13 @@ void PointerEventHandler::InitPointerEventFromTouch(
    aPointerEvent.mInputSource = aTouchEvent.mInputSource;
    aPointerEvent.mFromTouchEvent = true;
    aPointerEvent.mPressure = aTouch.mForce;
@@ -269,7 +269,7 @@ index 6a62bd704f..fa6f6fcaa8 100644
 +
  }  // namespace mozilla::dom
 diff --git a/dom/events/Touch.h b/dom/events/Touch.h
-index 2cd6c8d46a..722e0ca5ad 100644
+index 707dfe569b..255cb2fee7 100644
 --- a/dom/events/Touch.h
 +++ b/dom/events/Touch.h
 @@ -72,6 +72,20 @@ class Touch final : public nsISupports,
@@ -294,10 +294,10 @@ index 2cd6c8d46a..722e0ca5ad 100644
    nsCOMPtr<EventTarget> mTarget;
    LayoutDeviceIntPoint mRefPoint;
 diff --git a/layout/style/nsMediaFeatures.cpp b/layout/style/nsMediaFeatures.cpp
-index 3c62015e7e..fc31f45c65 100644
+index 53c079bc55..acc7713de7 100644
 --- a/layout/style/nsMediaFeatures.cpp
 +++ b/layout/style/nsMediaFeatures.cpp
-@@ -441,6 +441,13 @@ static PointerCapabilities GetPointerCapabilities(const Document* aDocument,
+@@ -467,6 +467,13 @@ static PointerCapabilities GetPointerCapabilities(const Document* aDocument,
  #ifdef ANDROID
    return PointerCapabilities::Coarse;
  #else

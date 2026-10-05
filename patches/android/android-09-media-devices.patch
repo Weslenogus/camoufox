@@ -1,5 +1,5 @@
 diff --git a/dom/bindings/Bindings.conf b/dom/bindings/Bindings.conf
-index f75e813e05..c471a4261c 100644
+index 5b846ffb61..22a5456191 100644
 --- a/dom/bindings/Bindings.conf
 +++ b/dom/bindings/Bindings.conf
 @@ -397,6 +397,11 @@ DOMInterfaces = {
@@ -14,7 +14,7 @@ index f75e813e05..c471a4261c 100644
  'IDBCursor': {
      'implicitJSContext': [ 'delete' ],
      'concrete': True,
-@@ -497,6 +502,12 @@ DOMInterfaces = {
+@@ -502,6 +507,12 @@ DOMInterfaces = {
      'nativeType': 'mozilla::extensions::MatchPatternSet',
  },
  
@@ -454,7 +454,7 @@ index 95a748fe94..11fb61c747 100644
  
  }  // namespace mozilla::dom
 diff --git a/dom/media/MediaDeviceInfo.h b/dom/media/MediaDeviceInfo.h
-index 0bd1d740c0..53379c1383 100644
+index f7ceab704f..35f5b4b9fd 100644
 --- a/dom/media/MediaDeviceInfo.h
 +++ b/dom/media/MediaDeviceInfo.h
 @@ -6,7 +6,9 @@
@@ -516,7 +516,7 @@ index 0bd1d740c0..53379c1383 100644
  
  }  // namespace mozilla::dom
 diff --git a/dom/media/MediaDevices.cpp b/dom/media/MediaDevices.cpp
-index 31490e30a5..aba06b0a39 100644
+index 5c4939eca5..bd93c891d7 100644
 --- a/dom/media/MediaDevices.cpp
 +++ b/dom/media/MediaDevices.cpp
 @@ -4,6 +4,7 @@
@@ -564,9 +564,9 @@ index 31490e30a5..aba06b0a39 100644
 +    return exposed;
 +  }
 +
-   // Replaces the RFP-based device count spoofing with one that controls the
-   // number of devices exposed.
- 
+   if (doc->ShouldResistFingerprinting(RFPTarget::MediaDevices)) {
+     // We expose a single device of each kind.
+     // Legacy mode also achieves the same thing, except for speakers.
 @@ -501,7 +535,28 @@ void MediaDevices::ResolveEnumerateDevicesPromise(
        legacy &&
        MediaManager::Get()->IsActivelyCapturingOrHasAPermission(windowId);
@@ -597,7 +597,7 @@ index 31490e30a5..aba06b0a39 100644
      bool exposeLabel = legacy ? capturePermitted : exposeInfo;
      infos.AppendElement(MakeRefPtr<MediaDeviceInfo>(
 diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
-index cc38a8f750..29c4a816c8 100644
+index f089b01f0d..a3328a12a7 100644
 --- a/dom/media/MediaManager.cpp
 +++ b/dom/media/MediaManager.cpp
 @@ -4,6 +4,7 @@
@@ -608,7 +608,7 @@ index cc38a8f750..29c4a816c8 100644
  #include "AudioCaptureTrack.h"
  #include "AudioDeviceInfo.h"
  #include "AudioStreamTrack.h"
-@@ -1170,11 +1171,27 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
+@@ -1171,11 +1172,27 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
  void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
    MOZ_ASSERT(NS_IsMainThread());
    Source()->GetSettings(aOutSettings);
@@ -636,7 +636,7 @@ index cc38a8f750..29c4a816c8 100644
    Source()->GetCapabilities(aOutCapabilities);
  }
  
-@@ -2416,6 +2433,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+@@ -2438,6 +2455,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
      GuessVideoDeviceGroupIDs(*devices, audios);
    }
  
@@ -673,7 +673,7 @@ index cc38a8f750..29c4a816c8 100644
    return devices;
  }
  
-@@ -3426,6 +3473,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
+@@ -3469,6 +3516,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
                // after a browser restart the fingerprint is not bigger.
                groupId.AppendInt(windowId);
                nsContentUtils::AnonymizeId(groupId, aOriginKey);
@@ -688,10 +688,10 @@ index cc38a8f750..29c4a816c8 100644
                    new LocalMediaDevice(device, id, groupId, name));
              }
 diff --git a/dom/media/moz.build b/dom/media/moz.build
-index eb53af3a83..2909f24d46 100644
+index caa1eaf516..d343bacff8 100644
 --- a/dom/media/moz.build
 +++ b/dom/media/moz.build
-@@ -261,6 +261,7 @@ EXPORTS.mozilla.dom += [
+@@ -266,6 +266,7 @@ EXPORTS.mozilla.dom += [
  UNIFIED_SOURCES += [
      "ADTSDecoder.cpp",
      "ADTSDemuxer.cpp",
@@ -700,19 +700,19 @@ index eb53af3a83..2909f24d46 100644
      "AudioChannelFormat.cpp",
      "AudioCompactor.cpp",
 diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
-index 8123aa05e5..6b96366275 100644
+index 9eeeb4765e..93cbdf9759 100644
 --- a/dom/media/webrtc/MediaEngineFake.cpp
 +++ b/dom/media/webrtc/MediaEngineFake.cpp
-@@ -4,6 +4,8 @@
- 
- #include "MediaEngineFake.h"
+@@ -7,6 +7,8 @@
+ #include "MaskConfig.hpp"
+ #include "AudioDeviceInfo.h"
  
 +#include "AndroidMediaDevices.h"
 +
  #include "AudioSegment.h"
  #include "FakeVideoSource.h"
  #include "ImageContainer.h"
-@@ -84,7 +86,10 @@ static nsString FakeVideoName() {
+@@ -87,7 +89,10 @@ static nsString FakeVideoName() {
   */
  class MediaEngineFakeVideoSource : public MediaEngineSource {
   public:
@@ -724,7 +724,7 @@ index 8123aa05e5..6b96366275 100644
  
    static already_AddRefed<MediaEngineFakeVideoSource> CreateFrom(
        const MediaEngineFakeVideoSource* aSource);
-@@ -133,15 +138,22 @@ class MediaEngineFakeVideoSource : public MediaEngineSource {
+@@ -136,15 +141,22 @@ class MediaEngineFakeVideoSource : public MediaEngineSource {
  
    // Main thread only.
    const RefPtr<media::Refcountable<dom::MediaTrackSettings>> mSettings;
@@ -751,7 +751,7 @@ index 8123aa05e5..6b96366275 100644
    mSettings->mResizeMode.Construct(NS_ConvertASCIItoUTF16(
        dom::GetEnumString(dom::VideoResizeModeEnum::None)));
  }
-@@ -149,7 +161,7 @@ MediaEngineFakeVideoSource::MediaEngineFakeVideoSource()
+@@ -152,7 +164,7 @@ MediaEngineFakeVideoSource::MediaEngineFakeVideoSource()
  /*static*/ already_AddRefed<MediaEngineFakeVideoSource>
  MediaEngineFakeVideoSource::CreateFrom(
      const MediaEngineFakeVideoSource* aSource) {
@@ -760,7 +760,7 @@ index 8123aa05e5..6b96366275 100644
    *static_cast<MediaTrackSettings*>(src->mSettings) = *aSource->mSettings;
    return src.forget();
  }
-@@ -171,7 +183,7 @@ uint32_t MediaEngineFakeVideoSource::GetBestFitnessDistance(
+@@ -174,7 +186,7 @@ uint32_t MediaEngineFakeVideoSource::GetBestFitnessDistance(
      const auto* cs = aConstraintSets.ElementAt(0);
      const auto resizeMode = MediaConstraintsHelper::GetResizeMode(*cs, aPrefs);
      using H = MediaConstraintsHelper;
@@ -769,7 +769,7 @@ index 8123aa05e5..6b96366275 100644
      distance += H::FitnessDistance(facingMode, cs->mFacingMode);
  
      if (resizeMode.valueOr(dom::VideoResizeModeEnum::None) ==
-@@ -202,8 +214,10 @@ void MediaEngineFakeVideoSource::GetCapabilities(
+@@ -205,8 +217,10 @@ void MediaEngineFakeVideoSource::GetCapabilities(
      MediaTrackCapabilities& aOutCapabilities) const {
    MOZ_ASSERT(NS_IsMainThread());
  
@@ -782,15 +782,15 @@ index 8123aa05e5..6b96366275 100644
    nsTArray<nsString> facing;
    facing.AppendElement(facingString);
    aOutCapabilities.mFacingMode.Construct(std::move(facing));
-@@ -618,7 +632,8 @@ RefPtr<MediaEngineSource> MediaEngineFake::CreateSource(
+@@ -693,7 +707,8 @@ RefPtr<MediaEngineSource> MediaEngineFake::CreateSource(
    MOZ_ASSERT(aMediaDevice->mEngine == this);
    switch (aMediaDevice->mMediaSource) {
      case MediaSourceEnum::Camera:
--      return new MediaEngineFakeVideoSource();
-+      return new MediaEngineFakeVideoSource(
+-      return MakeRefPtr<MediaEngineFakeVideoSource>();
++      return MakeRefPtr<MediaEngineFakeVideoSource>(
 +          AndroidMediaDevices::FacingModeOf(aMediaDevice->mRawName));
      case MediaSourceEnum::Microphone:
-       return new MediaEngineFakeAudioSource();
+       return MakeRefPtr<MediaEngineFakeAudioSource>();
      default:
 diff --git a/dom/webidl/InputDeviceInfo.webidl b/dom/webidl/InputDeviceInfo.webidl
 new file mode 100644
@@ -869,10 +869,10 @@ index f589a9d6b8..70d333471c 100644
 +  boolean torch;
  };
 diff --git a/dom/webidl/moz.build b/dom/webidl/moz.build
-index 6921360139..cfebbb9791 100644
+index 9a61a02386..a56b9bed99 100644
 --- a/dom/webidl/moz.build
 +++ b/dom/webidl/moz.build
-@@ -767,6 +767,7 @@ WEBIDL_FILES = [
+@@ -769,6 +769,7 @@ WEBIDL_FILES = [
      "ImageData.webidl",
      "ImageDecoder.webidl",
      "ImageDocument.webidl",

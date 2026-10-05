@@ -1,8 +1,23 @@
 diff --git a/dom/canvas/ClientWebGLContext.cpp b/dom/canvas/ClientWebGLContext.cpp
-index 54b5638d19..a9f1fb2464 100644
+index ead3743ac0..e6fbf50f84 100644
 --- a/dom/canvas/ClientWebGLContext.cpp
 +++ b/dom/canvas/ClientWebGLContext.cpp
-@@ -6199,6 +6199,14 @@ void ClientWebGLContext::GetSupportedProfilesASTC(
+@@ -2296,6 +2296,14 @@ void ClientWebGLContext::GetParameter(JSContext* cx, GLenum pname,
+             WebGLExtensionID::EXT_texture_filter_anisotropic);
+       case LOCAL_GL_MAX_VIEWS_OVR:
+         return IsExtensionEnabled(WebGLExtensionID::OVR_multiview2);
++      // Camoufox: an emulated Android device is Chrome, whose identity
++      // strings ("WebKit", "WebGL 1.0 (OpenGL ES 2.0 Chromium)", ...) are
++      // fixed per browser rather than live state.
++      case LOCAL_GL_VENDOR:
++      case LOCAL_GL_RENDERER:
++      case LOCAL_GL_VERSION:
++      case LOCAL_GL_SHADING_LANGUAGE_VERSION:
++        return MaskConfig::IsAndroidDevice();
+       default:
+         return false;
+     }
+@@ -6696,6 +6704,14 @@ void ClientWebGLContext::GetSupportedProfilesASTC(
    const auto& limits = Limits();
  
    auto& retarr = retval.SetValue();
@@ -98,7 +113,7 @@ index 0cd6f8726d..261512a659 100644
  
  // -
 diff --git a/dom/canvas/WebGLTextureUpload.cpp b/dom/canvas/WebGLTextureUpload.cpp
-index d26a00eafc..afd101de37 100644
+index ca607fb60f..3948c6b781 100644
 --- a/dom/canvas/WebGLTextureUpload.cpp
 +++ b/dom/canvas/WebGLTextureUpload.cpp
 @@ -4,6 +4,8 @@
@@ -110,7 +125,7 @@ index d26a00eafc..afd101de37 100644
  #include <algorithm>
  #include <bit>
  
-@@ -579,6 +581,11 @@ static inline GLenum DoTexStorage(gl::GLContext* gl, TexTarget target,
+@@ -639,6 +641,11 @@ static inline GLenum DoTexStorage(gl::GLContext* gl, TexTarget target,
                                    GLsizei depth) {
    gl::GLContext::LocalErrorScope errorScope(*gl);
  
@@ -122,7 +137,7 @@ index d26a00eafc..afd101de37 100644
    switch (target.get()) {
      case LOCAL_GL_TEXTURE_2D:
      case LOCAL_GL_TEXTURE_CUBE_MAP:
-@@ -666,6 +673,25 @@ static inline GLenum DoCompressedTexImage(gl::GLContext* gl,
+@@ -726,6 +733,25 @@ static inline GLenum DoCompressedTexImage(gl::GLContext* gl,
  
    gl::GLContext::LocalErrorScope errorScope(*gl);
  
@@ -148,7 +163,7 @@ index d26a00eafc..afd101de37 100644
    if (IsTarget3D(target)) {
      gl->fCompressedTexImage3D(target.get(), level, internalFormat, width,
                                height, depth, border, dataSize, data);
-@@ -683,6 +709,12 @@ GLenum DoCompressedTexSubImage(gl::GLContext* gl, TexImageTarget target,
+@@ -743,6 +769,12 @@ GLenum DoCompressedTexSubImage(gl::GLContext* gl, TexImageTarget target,
                                 GLint zOffset, GLsizei width, GLsizei height,
                                 GLsizei depth, GLenum sizedUnpackFormat,
                                 GLsizei dataSize, const void* data) {

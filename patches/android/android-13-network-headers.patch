@@ -43,7 +43,7 @@ index 8fa3ad316b..4bae9a5622 100644
    // exposes it to secure pages.
    static bool HasBatteryAPI(JSContext*, JSObject* aGlobal);
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index e75171250a..84dedecdda 100644
+index 6a44ccedf8..f5dd790ed1 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -58,7 +58,8 @@ interface mixin NavigatorID {

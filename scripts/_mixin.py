@@ -9,7 +9,6 @@ import contextlib
 import fnmatch
 import optparse
 import os
-import re
 import sys
 import time
 
@@ -34,9 +33,6 @@ def get_options():
     """Get options"""
     parser = optparse.OptionParser()
     parser.add_option('--mozconfig-only', dest='mozconfig_only', default=False, action="store_true")
-    parser.add_option(
-        '-P', '--no-settings-pane', dest='settings_pane', default=True, action="store_false"
-    )
     return parser.parse_args()
 
 
@@ -96,9 +92,6 @@ def list_patches(root_dir='../patches', suffix='*.patch'):
     # sorted() is stable, so the basename order survives within each group.
     return sorted(patches, key=late_rank)
 
-def is_bootstrap_patch(name):
-    return bool(re.match(r'\d+\-.*', os.path.basename(name)))
-
 
 def script_exit(statuscode):
     """Exit the script"""
@@ -126,24 +119,9 @@ def run(cmd, exit_on_fail=True, do_print=True):
     return retval
 
 
-def patch(patchfile, reverse=False, silent=False):
-    """Run a patch file"""
-    if reverse:
-        cmd = f"patch -p1 -R -i {patchfile}"
-    else:
-        cmd = f"patch -p1 -i {patchfile}"
-    if silent:
-        cmd += ' > /dev/null'
-    else:
-        print(f"\n*** -> {cmd}")
-    sys.stdout.flush()
-    run(cmd)
-
-
 __all__ = [
     'get_moz_target',
     'list_patches',
-    'patch',
     'run',
     'script_exit',
     'temp_cd',

@@ -1,5 +1,5 @@
 diff --git a/modules/libpref/Preferences.cpp b/modules/libpref/Preferences.cpp
-index c13dd1eb5b..20de37d6e4 100644
+index f2127ef18b..927f7b3739 100644
 --- a/modules/libpref/Preferences.cpp
 +++ b/modules/libpref/Preferences.cpp
 @@ -9,6 +9,8 @@
@@ -11,8 +11,8 @@ index c13dd1eb5b..20de37d6e4 100644
  #include "base/basictypes.h"
  #include "MainThreadUtils.h"
  #include "mozilla/AppShutdown.h"
-@@ -4172,10 +4174,47 @@ void Preferences::InitializeUserPrefs() {
-   sPreferences->mCurrentFile = std::move(prefsFile);
+@@ -4980,10 +4982,47 @@ void Preferences::InitializeUserPrefs() {
+   sPImpl->mCurrentFile = std::move(prefsFile);
  }
  
 +// Camoufox: the emulated device's own platform defaults ("device:prefs", an
@@ -54,16 +54,16 @@ index c13dd1eb5b..20de37d6e4 100644
  /* static */
  void Preferences::FinishInitializingUserPrefs() {
    MOZ_ASSERT(NS_IsMainThread());
-   sPreferences->NotifyServiceObservers(NS_PREFSERVICE_READ_TOPIC_ID);
+   sPImpl->NotifyServiceObservers(NS_PREFSERVICE_READ_TOPIC_ID);
 +  ApplyDevicePrefs();
  }
  
  NS_IMETHODIMP
 diff --git a/modules/libpref/moz.build b/modules/libpref/moz.build
-index fa05921295..1e3d8b8724 100644
+index 2c8b218c61..9d328aa408 100644
 --- a/modules/libpref/moz.build
 +++ b/modules/libpref/moz.build
-@@ -183,3 +183,6 @@ else:
+@@ -182,3 +182,6 @@ else:
      FINAL_TARGET_PP_FILES += [
          "greprefs.js",
      ]
