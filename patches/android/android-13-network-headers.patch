@@ -1,5 +1,5 @@
 diff --git a/dom/base/AndroidDevice.cpp b/dom/base/AndroidDevice.cpp
-index 99aac18e54..43944fea2b 100644
+index 9e10603580..26bbd5845e 100644
 --- a/dom/base/AndroidDevice.cpp
 +++ b/dom/base/AndroidDevice.cpp
 @@ -28,14 +28,20 @@ bool AndroidDevice::HasDeviceMemory(JSContext*, JSObject*) {
@@ -43,7 +43,7 @@ index 8fa3ad316b..4bae9a5622 100644
    // exposes it to secure pages.
    static bool HasBatteryAPI(JSContext*, JSObject* aGlobal);
 diff --git a/dom/webidl/Navigator.webidl b/dom/webidl/Navigator.webidl
-index d96cdfc9d0..bd6ed828bc 100644
+index e75171250a..84dedecdda 100644
 --- a/dom/webidl/Navigator.webidl
 +++ b/dom/webidl/Navigator.webidl
 @@ -58,7 +58,8 @@ interface mixin NavigatorID {

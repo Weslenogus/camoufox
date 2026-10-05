@@ -13,7 +13,8 @@ reports what Chrome on a Pixel does:
     "camera2 0, facing back" -- with 64-hex-digit ids;
   * the back camera's capabilities: facingMode ["environment"], and, on a
     running track, zoom, torch, focusMode and exposureMode; the front camera
-    has facingMode ["user"] and neither zoom nor torch.
+    has facingMode ["user"] and no torch. (android-camera2.py checks the
+    controls in detail.)
 
 The control launch keeps Firefox's own shape: no InputDeviceInfo interface.
 
@@ -23,8 +24,16 @@ Run:
 
 from helpers import PIXEL10, PageServer, compare, launch_raw, run_guard
 
-PROBE = r"""async () => {
+PROBE = r"""async (capture) => {
+  // Firefox lists every device, labelled, while a capture it allowed is live;
+  // that stands in for the persistent grant after which Chrome does.
+  let stream = null;
+  if (capture) {
+    try { stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true}); }
+    catch (e) {}
+  }
   const list = await navigator.mediaDevices.enumerateDevices();
+  if (stream) stream.getTracks().forEach(t => t.stop());
   return {
     InputDeviceInfo: 'InputDeviceInfo' in window,
     devices: list.map(d => ({
@@ -48,10 +57,12 @@ HEX64 = lambda v: isinstance(v, str) and len(v) == 64 and all(c in "0123456789ab
 
 async def probe(binary, config, grant):
     with PageServer({"/": ("text/html", "<!doctype html><title>media</title>")}) as server:
-        options = {"permissions": ["camera", "microphone"]} if grant else {}
-        async with launch_raw(binary, config, **options) as page:
+        # Playwright's Firefox cannot grant "camera"/"microphone"; the pref
+        # allows getUserMedia() without a prompt, as a granted permission does.
+        prefs = {"media.navigator.permission.disabled": True} if grant else None
+        async with launch_raw(binary, config, prefs=prefs) as page:
             await page.goto(server.url("/"))
-            data = await page.evaluate(PROBE)
+            data = await page.evaluate(PROBE, grant)
             if grant and data["InputDeviceInfo"]:
                 try:
                     data["track"] = await page.evaluate(TRACK)

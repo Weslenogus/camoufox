@@ -96,15 +96,18 @@ def resolve_binary(argv: List[str]) -> Optional[_Path]:
 
 
 @asynccontextmanager
-async def launch_raw(binary: _Path, config: Dict[str, Any], **context_options):
-    """Launch the binary with `config` as CAMOU_CONFIG; yield a fresh page."""
+async def launch_raw(binary: _Path, config: Dict[str, Any],
+                     prefs: Optional[Dict[str, Any]] = None, **context_options):
+    """Launch the binary with `config` as CAMOU_CONFIG (and `prefs` as user
+    prefs, if given); yield a fresh page."""
     from playwright.async_api import async_playwright
 
     env = dict(_os.environ)
     env["CAMOU_CONFIG_1"] = _json.dumps(config)
     async with async_playwright() as p:
         browser = await p.firefox.launch(
-            executable_path=str(binary), headless=True, env=env
+            executable_path=str(binary), headless=True, env=env,
+            firefox_user_prefs=prefs or {},
         )
         try:
             context = await browser.new_context(**context_options)

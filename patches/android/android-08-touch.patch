@@ -32,6 +32,31 @@ index 23c52ffea1..16b7a2625c 100644
      if (aTouches[i].mAltitudeAngle.WasPassed()) {
        MOZ_ASSERT(aTouches[i].mAzimuthAngle.WasPassed());
        t->mAngle.emplace(aTouches[i].mAltitudeAngle.Value(),
+diff --git a/dom/events/EventStateManager.cpp b/dom/events/EventStateManager.cpp
+index 4fe9337e86..df93ea09ca 100644
+--- a/dom/events/EventStateManager.cpp
++++ b/dom/events/EventStateManager.cpp
+@@ -70,6 +70,7 @@
+ #include "mozilla/dom/PopoverData.h"
+ #include "mozilla/dom/Record.h"
+ #include "mozilla/dom/Selection.h"
++#include "mozilla/dom/Touch.h"
+ #include "mozilla/dom/UIEvent.h"
+ #include "mozilla/dom/UIEventBinding.h"
+ #include "mozilla/dom/UserActivation.h"
+@@ -6251,6 +6252,12 @@ nsresult EventStateManager::InitAndDispatchClickEvent(
+   mouseOrPointerEvent.mButton = aMouseUpEvent->mButton;
+   mouseOrPointerEvent.pointerId = aMouseUpEvent->pointerId;
+   mouseOrPointerEvent.mInputSource = aMouseUpEvent->mInputSource;
++  // Camoufox: the click of an emulated finger is the finger's too
++  // (PointerEvent::ResistantInputSource).
++  if (Touch::EmulatesFingers()) {
++    mouseOrPointerEvent.mFlags.mIsSynthesizedForTests =
++        aMouseUpEvent->mFlags.mIsSynthesizedForTests;
++  }
+   nsIContent* target = aMouseUpContent;
+   nsIFrame* targetFrame = aCurrentTarget;
+   if (aOverrideClickTarget) {
 diff --git a/dom/events/PointerEvent.cpp b/dom/events/PointerEvent.cpp
 index 37a8875d71..249f3a7b4f 100644
 --- a/dom/events/PointerEvent.cpp

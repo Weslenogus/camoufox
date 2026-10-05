@@ -68,7 +68,7 @@ index 0000000000..f9629db4b1
 +
 +#endif  // mozilla_dom_AndroidDevice_h
 diff --git a/dom/base/Navigator.cpp b/dom/base/Navigator.cpp
-index bf721422fd..6001101692 100644
+index bf721422fd..c072080127 100644
 --- a/dom/base/Navigator.cpp
 +++ b/dom/base/Navigator.cpp
 @@ -6,6 +6,7 @@
@@ -95,7 +95,19 @@ index bf721422fd..6001101692 100644
  
  void Navigator::GetVendorSub(nsAString& aVendorSub) { aVendorSub.Truncate(); }
  
-@@ -763,6 +771,11 @@ bool Navigator::GlobalPrivacyControl() {
+@@ -569,6 +577,11 @@ void Navigator::GetProduct(nsAString& aProduct) {
+ }
+ 
+ void Navigator::GetProductSub(nsAString& aProductSub) {
++  // Camoufox: "navigator.productSub" (Chrome reports "20030107").
++  if (auto value = MaskConfig::GetString("navigator.productSub")) {
++    aProductSub.Assign(NS_ConvertUTF8toUTF16(value.value()));
++    return;
++  }
+   // Legacy build date hardcoded for backward compatibility (bug 776376)
+   aProductSub.AssignLiteral(LEGACY_UA_GECKO_TRAIL);
+ }
+@@ -763,6 +776,11 @@ bool Navigator::GlobalPrivacyControl() {
           gpcStatus;
  }
  

@@ -58,11 +58,17 @@ FEATURES = sorted([
 ])
 
 
+# The probe iterates adapter.features, which the isolated world cannot do
+# (Xrays do not wrap iterators), so the page defines it and a "mw:"
+# evaluation runs it.
+PAGE = "<!doctype html><title>webgpu</title><script>window.probe = " + PROBE + ";</script>"
+
+
 async def probe(binary, config):
-    with PageServer({"/": ("text/html", "<!doctype html><title>webgpu</title>")}) as server:
-        async with launch_raw(binary, config) as page:
+    with PageServer({"/": ("text/html", PAGE)}) as server:
+        async with launch_raw(binary, dict(config, allowMainWorld=True)) as page:
             await page.goto(server.url("/"))
-            return await page.evaluate(PROBE)
+            return await page.evaluate("mw:window.probe()")
 
 
 async def main(binary) -> bool:

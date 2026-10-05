@@ -25,7 +25,7 @@ CONFIGS = {
 }
 
 PROBE = r"""async (configs) => {
-  const run = async (mc) => {
+  const run = async (mc, configs) => {
     const out = {};
     for (const [name, [contentType, width, height, framerate]] of Object.entries(configs)) {
       try {
@@ -36,13 +36,15 @@ PROBE = r"""async (configs) => {
     return out;
   };
   const worker = await new Promise(resolve => {
+    // run's source only: the configurations travel in the message.
     const src = `const run = ${run.toString()};
-      onmessage = async e => postMessage(await run(navigator.mediaCapabilities));`;
+      onmessage = async e => postMessage(await run(navigator.mediaCapabilities, JSON.parse(e.data)));`;
     const w = new Worker(URL.createObjectURL(new Blob([src], {type: 'text/javascript'})));
     w.onmessage = e => resolve(e.data);
-    w.postMessage(null);
+    w.onerror = e => resolve('worker error: ' + e.message);
+    w.postMessage(JSON.stringify(configs));
   });
-  return {window: await run(navigator.mediaCapabilities), worker};
+  return {window: await run(navigator.mediaCapabilities, configs), worker};
 }"""
 
 EXPECTED = {

@@ -1,16 +1,18 @@
 diff --git a/dom/webgpu/Adapter.cpp b/dom/webgpu/Adapter.cpp
-index 568509ad2b..af05c8e1bf 100644
+index 568509ad2b..0818810c4e 100644
 --- a/dom/webgpu/Adapter.cpp
 +++ b/dom/webgpu/Adapter.cpp
-@@ -12,6 +12,7 @@
+@@ -12,7 +12,9 @@
  #include "SupportedFeatures.h"
  #include "SupportedLimits.h"
  #include "ipc/WebGPUChild.h"
 +#include "MaskConfig.hpp"
  #include "mozilla/dom/BindingDeclarations.h"
++#include "mozilla/dom/BindingUtils.h"
  #include "mozilla/dom/Promise.h"
  #include "mozilla/dom/WebGPUBinding.h"
-@@ -22,6 +23,30 @@ namespace mozilla::webgpu {
+ #include "mozilla/webgpu/ffi/wgpu.h"
+@@ -22,6 +24,30 @@ namespace mozilla::webgpu {
  GPU_IMPL_CYCLE_COLLECTION(AdapterInfo, mParent)
  GPU_IMPL_JS_WRAP(AdapterInfo)
  
@@ -41,7 +43,7 @@ index 568509ad2b..af05c8e1bf 100644
  uint32_t AdapterInfo::SubgroupMinSize() const {
    // From the spec. at
    // <https://www.w3.org/TR/2025/CRD-webgpu-20250319/#dom-gpuadapterinfo-subgroupminsize>:
-@@ -35,6 +60,9 @@ uint32_t AdapterInfo::SubgroupMinSize() const {
+@@ -35,6 +61,9 @@ uint32_t AdapterInfo::SubgroupMinSize() const {
    // > different devices, but are still usable (e.g. use the default value of
    // > 4 for all devices).
  
@@ -51,7 +53,7 @@ index 568509ad2b..af05c8e1bf 100644
    if (GetParentObject()->ShouldResistFingerprinting(
            RFPTarget::WebGPUSubgroupSizes)) {
      return 4;
-@@ -58,6 +86,9 @@ uint32_t AdapterInfo::SubgroupMaxSize() const {
+@@ -58,6 +87,9 @@ uint32_t AdapterInfo::SubgroupMaxSize() const {
    // > different devices, but are still usable (e.g. use the default value of
    // > 128 for all devices).
  
@@ -61,7 +63,7 @@ index 568509ad2b..af05c8e1bf 100644
    if (GetParentObject()->ShouldResistFingerprinting(
            RFPTarget::WebGPUSubgroupSizes)) {
      return 128;
-@@ -69,6 +100,9 @@ uint32_t AdapterInfo::SubgroupMaxSize() const {
+@@ -69,6 +101,9 @@ uint32_t AdapterInfo::SubgroupMaxSize() const {
  }
  
  bool AdapterInfo::IsFallbackAdapter() const {
@@ -71,7 +73,22 @@ index 568509ad2b..af05c8e1bf 100644
    if (GetParentObject()->ShouldResistFingerprinting(
            RFPTarget::WebGPUIsFallbackAdapter)) {
      // Always report hardware support for WebGPU.
-@@ -259,6 +293,76 @@ struct FeatureImplementationStatus {
+@@ -248,6 +283,14 @@ struct FeatureImplementationStatus {
+         return unimplemented(
+             "https://bugzilla.mozilla.org/show_bug.cgi?id=1989116");
+ 
++      case dom::GPUFeatureName::Texture_component_swizzle:
++      case dom::GPUFeatureName::Texture_formats_tier1:
++      case dom::GPUFeatureName::Texture_formats_tier2:
++        // Camoufox: only ever listed by an emulated adapter.
++        return unimplemented(
++            "https://bugzilla.mozilla.org/"
++            "enter_bug.cgi?product=Core&component=Graphics%3A+WebGPU");
++
+       case dom::GPUFeatureName::Core_features_and_limits:
+         // NOTE: `0` means that no bits are set in calling code, but this is on
+         // purpose. We currently _always_ return this feature elsewhere. If this
+@@ -259,6 +302,76 @@ struct FeatureImplementationStatus {
    }
  };
  
@@ -148,7 +165,7 @@ index 568509ad2b..af05c8e1bf 100644
  Adapter::Adapter(Instance* const aParent, WebGPUChild* const aChild,
                   const std::shared_ptr<ffi::WGPUAdapterInformation>& aInfo)
      : ObjectBase(aChild, aInfo->id, ffi::wgpu_client_drop_adapter),
-@@ -334,6 +438,21 @@ Adapter::Adapter(Instance* const aParent, WebGPUChild* const aChild,
+@@ -334,6 +447,21 @@ Adapter::Adapter(Instance* const aParent, WebGPUChild* const aChild,
    if (GetParentObject()->ShouldResistFingerprinting(RFPTarget::WebGPULimits)) {
      ffi::wgpu_client_fill_default_limits(mLimits->mFfi.get());
    }
@@ -252,3 +269,19 @@ index 9c05835bc8..b24234ff53 100644
 +LOCAL_INCLUDES += ["/camoucfg"]
 +
  FINAL_LIBRARY = "xul"
+diff --git a/dom/webidl/WebGPU.webidl b/dom/webidl/WebGPU.webidl
+index 9fbc2244e6..d414422373 100644
+--- a/dom/webidl/WebGPU.webidl
++++ b/dom/webidl/WebGPU.webidl
+@@ -159,6 +159,11 @@ enum GPUFeatureName {
+     "dual-source-blending",
+     "subgroups",
+     "primitive-index",
++    // Camoufox: features Chrome reports that Gecko does not implement,
++    // listed by the emulated GPU's adapter ("webGpu:features").
++    "texture-component-swizzle",
++    "texture-formats-tier1",
++    "texture-formats-tier2",
+ };
+ 
+ [Func="mozilla::webgpu::Instance::PrefEnabled",

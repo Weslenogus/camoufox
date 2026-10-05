@@ -95,11 +95,17 @@ def expected(kind: str):
     }
 
 
+# The probe reads WebGL's typed-array answers, which the isolated world may not
+# do (TypedArray data over Xrays is forbidden), so the page defines it and a
+# "mw:" evaluation runs it.
+PAGE = "<!doctype html><title>webgl</title><script>window.probe = " + PROBE + ";</script>"
+
+
 async def probe(binary, config, kind):
-    with PageServer({"/": ("text/html", "<!doctype html><title>webgl</title>")}) as server:
-        async with launch_raw(binary, config) as page:
+    with PageServer({"/": ("text/html", PAGE)}) as server:
+        async with launch_raw(binary, dict(config, allowMainWorld=True)) as page:
             await page.goto(server.url("/"))
-            return await page.evaluate(PROBE, kind)
+            return await page.evaluate(f"mw:window.probe({kind!r})")
 
 
 async def main(binary) -> bool:

@@ -221,26 +221,88 @@ static nlohmann::json Pixel10() {
   };
 
   // Capture devices, as Chrome enumerates them on a Pixel: the Camera2
-  // devices in descending id order (front first), each with its capture
-  // formats and Image Capture controls. Sizes are the sensors' largest
-  // YUV outputs.
+  // devices in descending id order (front first). Sizes are the sensors'
+  // largest YUV outputs; photoSizes their JPEG outputs, largest first.
+  //
+  // The Image Capture controls are what Chrome's VideoCaptureCamera2 derives
+  // from the Camera2 characteristics, with its float arithmetic: focus and
+  // exposure modes in AF/AE mode order, exposure compensation as
+  // CONTROL_AE_COMPENSATION_RANGE [-12, 12] times a 1/6 EV step, exposure
+  // time in 100 us units, focus distance in meters from the lens's minimum
+  // focus and hyperfocal distances (10 and 0.3 diopters at the back, 5 and
+  // 0.5 at the front), zoom up to SCALER_AVAILABLE_MAX_DIGITAL_ZOOM, and
+  // Chrome's fixed white-balance preset range. ISO and exposure-time limits
+  // are representative of Pixel sensors; "settings" holds the values a
+  // running preview reports before any is set.
+  const auto photoSizes = [](std::initializer_list<std::pair<int, int>> aSizes) {
+    nlohmann::json out = nlohmann::json::array();
+    for (const auto& [width, height] : aSizes) {
+      out.push_back({width, height});
+    }
+    return out;
+  };
+  const nlohmann::json modes = {"manual", "single-shot", "continuous"};
+  const nlohmann::json meteringModes = {"continuous", "manual"};
+  const nlohmann::json compensation = {
+      {"min", -2}, {"max", 2}, {"step", 0.1666666716337204}};
+  const nlohmann::json colorTemperature = {
+      {"min", 2850}, {"max", 7000}, {"step", 50}};
+  const nlohmann::json exposureTime = {
+      {"min", 0.15}, {"max", 10000}, {"step", 0.1}};
   p["mediaDevices:cameras"] = nlohmann::json::array({
       {{"label", "camera2 1, facing front"},
        {"facingMode", "user"},
        {"width", 3648},
        {"height", 2736},
        {"frameRate", 30},
-       {"focusMode", {"continuous", "single-shot", "manual"}},
-       {"exposureMode", {"continuous", "manual"}}},
+       {"activeArray", {3648, 2736}},
+       {"zoom", {{"min", 1}, {"max", 4}, {"step", 0.1}}},
+       {"torch", false},
+       {"focusMode", modes},
+       {"exposureMode", meteringModes},
+       {"whiteBalanceMode", meteringModes},
+       {"exposureCompensation", compensation},
+       {"exposureTime", exposureTime},
+       {"colorTemperature", colorTemperature},
+       {"iso", {{"min", 50}, {"max", 3200}, {"step", 1}}},
+       {"focusDistance",
+        {{"min", 0.20000000298023224},
+         {"max", 2},
+         {"step", 0.009999999776482582}}},
+       {"photoSizes",
+        photoSizes({{3648, 2736}, {3648, 2052}, {3264, 2448}, {2560, 1920},
+                    {1920, 1440}, {1920, 1080}, {1600, 1200}, {1280, 960},
+                    {1280, 720}, {1024, 768}, {800, 600}, {640, 480},
+                    {640, 360}, {352, 288}, {320, 240}, {176, 144}})},
+       {"settings", {{"iso", 100}, {"exposureTime", 333.33}}}},
       {{"label", "camera2 0, facing back"},
        {"facingMode", "environment"},
        {"width", 4080},
        {"height", 3072},
        {"frameRate", 30},
+       {"activeArray", {4080, 3072}},
        {"zoom", {{"min", 1}, {"max", 8}, {"step", 0.1}}},
        {"torch", true},
-       {"focusMode", {"continuous", "single-shot", "manual"}},
-       {"exposureMode", {"continuous", "manual"}}},
+       {"focusMode", modes},
+       {"exposureMode", meteringModes},
+       {"whiteBalanceMode", meteringModes},
+       {"exposureCompensation", compensation},
+       {"exposureTime", exposureTime},
+       {"colorTemperature", colorTemperature},
+       {"iso", {{"min", 50}, {"max", 6400}, {"step", 1}}},
+       {"focusDistance",
+        {{"min", 0.10000000149011612},
+         {"max", 3.3333332538604736},
+         {"step", 0.009999999776482582}}},
+       {"photoSizes",
+        photoSizes({{4080, 3072}, {4080, 2296}, {4000, 3000}, {3840, 2160},
+                    {3264, 2448}, {3264, 1836}, {2560, 1920}, {2304, 1728},
+                    {1920, 1440}, {1920, 1080}, {1600, 1200}, {1440, 1080},
+                    {1280, 960}, {1280, 720}, {1024, 768}, {800, 600},
+                    {720, 480}, {640, 480}, {640, 360}, {352, 288},
+                    {320, 240}, {176, 144}})},
+       {"fillLightMode", {"off", "auto", "flash"}},
+       {"settings", {{"iso", 100}, {"exposureTime", 333.33}}}},
   });
 
   // Screen: 1080x2424 physical at DPR 2.625 is 412x915 CSS px; the status
@@ -294,7 +356,7 @@ static nlohmann::json Pixel10() {
   {
     auto voice = [](const char* aName, const char* aLang, bool aDefault) {
       return nlohmann::json{{"name", aName},
-                            {"voiceURI", aName},
+                            {"voiceUri", aName},
                             {"lang", aLang},
                             {"isLocalService", false},
                             {"isDefault", aDefault}};
@@ -349,6 +411,11 @@ static nlohmann::json Pixel10() {
       // grayscale on Windows builds (fontconfig builds drop the subpixel
       // order from the font pattern instead).
       {"gfx.font_rendering.cleartype_params.cleartype_level", 0},
+      // A phone always has WebGL. Packaged builds ship without glxtest
+      // (scripts/package.py), and without that probe Gecko's GL blocklist
+      // turns WebGL off: the camoufox Python package forces it on, and the
+      // profile does too, for launches that bypass it.
+      {"webgl.force-enabled", true},
       // WebGPU ships in Chrome on Android, in windows and every worker; a
       // phone always has it, so the host's GPU blocklist is not consulted.
       // Chrome's Accept headers for documents and images (scripts, styles

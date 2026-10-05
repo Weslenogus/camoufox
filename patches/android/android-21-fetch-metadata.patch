@@ -1,0 +1,29 @@
+diff --git a/netwerk/protocol/http/nsHttpHandler.cpp b/netwerk/protocol/http/nsHttpHandler.cpp
+index 67d3211ebb..415cfef283 100644
+--- a/netwerk/protocol/http/nsHttpHandler.cpp
++++ b/netwerk/protocol/http/nsHttpHandler.cpp
+@@ -1980,10 +1980,14 @@ void nsHttpHandler::PrefsChanged(const char* pref) {
+   const bool imageAcceptPrefChanged =
+       PREF_CHANGED("image.http.accept") || PREF_CHANGED("image.jxl.enabled");
+ 
++  // Camoufox: an emulated Android device sets Chrome's Accept headers through
++  // "device:prefs", on the default branch; honor those as well as user values.
++  const bool deviceAcceptPrefs = MaskConfig::IsAndroidDevice();
++
+   if (imageAcceptPrefChanged) {
+     nsAutoCString userSetImageAcceptHeader;
+ 
+-    if (Preferences::HasUserValue("image.http.accept")) {
++    if (Preferences::HasUserValue("image.http.accept") || deviceAcceptPrefs) {
+       rv = Preferences::GetCString("image.http.accept",
+                                    userSetImageAcceptHeader);
+       if (NS_FAILED(rv)) {
+@@ -2001,7 +2005,7 @@ void nsHttpHandler::PrefsChanged(const char* pref) {
+   if (PREF_CHANGED("network.http.accept") || imageAcceptPrefChanged) {
+     nsAutoCString userSetDocumentAcceptHeader;
+ 
+-    if (Preferences::HasUserValue("network.http.accept")) {
++    if (Preferences::HasUserValue("network.http.accept") || deviceAcceptPrefs) {
+       rv = Preferences::GetCString("network.http.accept",
+                                    userSetDocumentAcceptHeader);
+       if (NS_FAILED(rv)) {

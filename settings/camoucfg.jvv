@@ -361,7 +361,25 @@
         },
         "torch": "bool",
         "focusMode": "array[str]",
-        "exposureMode": "array[str]"
+        "exposureMode": "array[str]",
+        "whiteBalanceMode": "array[str]",
+        "exposureCompensation": "@SETTINGS_RANGE",
+        "exposureTime": "@SETTINGS_RANGE",
+        "colorTemperature": "@SETTINGS_RANGE",
+        "iso": "@SETTINGS_RANGE",
+        "focusDistance": "@SETTINGS_RANGE",
+        "activeArray": "tuple[int[>0], int[>0]]",
+        "photoSizes": "array[tuple[int[>0], int[>0]]]",
+        "fillLightMode": "array[str[off, auto, flash]]",
+        "settings": {
+            "iso": "double[>=0]",
+            "exposureTime": "double[>=0]"
+        }
+    },
+    "@SETTINGS_RANGE": {
+        "*min": "double",
+        "*max": "double",
+        "step": "double"
     },
     "screen.orientation.type": "str[portrait-primary, portrait-secondary, landscape-primary, landscape-secondary]",
     "screen.orientation.angle": "int[>=0]",

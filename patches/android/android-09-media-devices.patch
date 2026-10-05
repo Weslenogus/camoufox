@@ -1,5 +1,5 @@
 diff --git a/dom/bindings/Bindings.conf b/dom/bindings/Bindings.conf
-index f75e813e05..50b431b798 100644
+index f75e813e05..c471a4261c 100644
 --- a/dom/bindings/Bindings.conf
 +++ b/dom/bindings/Bindings.conf
 @@ -397,6 +397,11 @@ DOMInterfaces = {
@@ -14,12 +14,25 @@ index f75e813e05..50b431b798 100644
  'IDBCursor': {
      'implicitJSContext': [ 'delete' ],
      'concrete': True,
+@@ -497,6 +502,12 @@ DOMInterfaces = {
+     'nativeType': 'mozilla::extensions::MatchPatternSet',
+ },
+ 
++'MediaDeviceInfo': {
++    # Camoufox: InputDeviceInfo derives from it (Android device profiles),
++    # and output devices are still plain MediaDeviceInfo objects.
++    'concrete': True,
++},
++
+ 'MediaStream': {
+     'headerFile': 'DOMMediaStream.h',
+     'nativeType': 'mozilla::DOMMediaStream'
 diff --git a/dom/media/AndroidMediaDevices.cpp b/dom/media/AndroidMediaDevices.cpp
 new file mode 100644
-index 0000000000..11f290b5da
+index 0000000000..c79859b8de
 --- /dev/null
 +++ b/dom/media/AndroidMediaDevices.cpp
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,298 @@
 +/* This Source Code Form is subject to the terms of the Mozilla Public
 + * License, v. 2.0. If a copy of the MPL was not distributed with this file,
 + * You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -291,6 +304,8 @@ index 0000000000..11f290b5da
 +                                      MediaTrackSettings& aOut) {
 +  const Camera* camera = FindCamera(aRawName);
 +  if (camera && !camera->mFacingMode.IsEmpty()) {
++    // The source may already have reported one.
++    aOut.mFacingMode.Reset();
 +    aOut.mFacingMode.Construct(camera->mFacingMode);
 +  }
 +}
@@ -307,8 +322,8 @@ index 0000000000..11f290b5da
 +  }
 +  static const char kHex[] = "0123456789abcdef";
 +  nsAutoString hex;
-+  for (char c : bytes) {
-+    const auto byte = static_cast<uint8_t>(c);
++  for (uint32_t i = 0; i < bytes.Length(); ++i) {
++    const auto byte = static_cast<uint8_t>(bytes[i]);
 +    hex.Append(char16_t(kHex[byte >> 4]));
 +    hex.Append(char16_t(kHex[byte & 0xf]));
 +  }
@@ -439,18 +454,20 @@ index 95a748fe94..11fb61c747 100644
  
  }  // namespace mozilla::dom
 diff --git a/dom/media/MediaDeviceInfo.h b/dom/media/MediaDeviceInfo.h
-index 0bd1d740c0..ae7d7ea68e 100644
+index 0bd1d740c0..53379c1383 100644
 --- a/dom/media/MediaDeviceInfo.h
 +++ b/dom/media/MediaDeviceInfo.h
-@@ -7,6 +7,7 @@
+@@ -6,7 +6,9 @@
+ #define mozilla_dom_MediaDeviceInfo_h
  
  #include "js/RootingAPI.h"
++#include "mozilla/dom/AndroidDevice.h"
  #include "mozilla/dom/MediaDeviceInfoBinding.h"
 +#include "mozilla/dom/MediaTrackCapabilitiesBinding.h"
  #include "nsCycleCollectionParticipant.h"
  #include "nsID.h"
  #include "nsISupports.h"
-@@ -18,7 +19,8 @@ namespace mozilla::dom {
+@@ -18,7 +20,8 @@ namespace mozilla::dom {
  #define MOZILLA_DOM_MEDIADEVICEINFO_IMPLEMENTATION_IID \
    {0x25091870, 0x84d6, 0x4acf, {0xaf, 0x97, 0x6e, 0xd5, 0x5b, 0xe0, 0x47, 0xb2}}
  
@@ -460,7 +477,7 @@ index 0bd1d740c0..ae7d7ea68e 100644
   public:
    explicit MediaDeviceInfo(const nsAString& aDeviceId, MediaDeviceKind aKind,
                             const nsAString& aLabel, const nsAString& aGroupId);
-@@ -37,13 +39,36 @@ class MediaDeviceInfo final : public nsISupports, public nsWrapperCache {
+@@ -37,13 +40,36 @@ class MediaDeviceInfo final : public nsISupports, public nsWrapperCache {
    void GetLabel(nsString& retval);
    void GetGroupId(nsString& retval);
  
@@ -580,7 +597,7 @@ index 31490e30a5..aba06b0a39 100644
      bool exposeLabel = legacy ? capturePermitted : exposeInfo;
      infos.AppendElement(MakeRefPtr<MediaDeviceInfo>(
 diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
-index cc38a8f750..a1aff4b2ae 100644
+index cc38a8f750..29c4a816c8 100644
 --- a/dom/media/MediaManager.cpp
 +++ b/dom/media/MediaManager.cpp
 @@ -4,6 +4,7 @@
@@ -591,7 +608,7 @@ index cc38a8f750..a1aff4b2ae 100644
  #include "AudioCaptureTrack.h"
  #include "AudioDeviceInfo.h"
  #include "AudioStreamTrack.h"
-@@ -1170,11 +1171,28 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
+@@ -1170,11 +1171,27 @@ LocalMediaDevice::GetCanRequestOsLevelPrompt(bool* aCanRequestOsLevelPrompt) {
  void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
    MOZ_ASSERT(NS_IsMainThread());
    Source()->GetSettings(aOutSettings);
@@ -610,17 +627,16 @@ index cc38a8f750..a1aff4b2ae 100644
 +      GetMediaSource() != MediaSourceEnum::Screen &&
 +      GetMediaSource() != MediaSourceEnum::Window &&
 +      GetMediaSource() != MediaSourceEnum::Browser) {
-+    // A capture device reports the phone's camera or microphone.
++    // A capture device reports the phone's camera or microphone. Its
++    // deviceId and groupId are added by DeviceListener::GetCapabilities.
 +    AndroidMediaDevices::GetCapabilities(Kind(), mRawDevice->mRawName,
 +                                         /* aTrack */ true, aOutCapabilities);
-+    aOutCapabilities.mDeviceId.Construct(mID);
-+    aOutCapabilities.mGroupId.Construct(mGroupID);
 +    return;
 +  }
    Source()->GetCapabilities(aOutCapabilities);
  }
  
-@@ -2416,6 +2434,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
+@@ -2416,6 +2433,36 @@ MediaManager::EnumerateRawDevices(EnumerationParams aParams) {
      GuessVideoDeviceGroupIDs(*devices, audios);
    }
  
@@ -657,7 +673,7 @@ index cc38a8f750..a1aff4b2ae 100644
    return devices;
  }
  
-@@ -3426,6 +3474,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
+@@ -3426,6 +3473,13 @@ RefPtr<LocalDeviceSetPromise> MediaManager::AnonymizeDevices(
                // after a browser restart the fingerprint is not bigger.
                groupId.AppendInt(windowId);
                nsContentUtils::AnonymizeId(groupId, aOriginKey);

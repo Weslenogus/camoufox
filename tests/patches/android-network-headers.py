@@ -122,10 +122,13 @@ async def main(binary) -> bool:
     for c in data["candidates"]:
         print(f"    [info] {c}")
 
-    print("\n=== control (no profile): Firefox's own UA ===")
+    print("\n=== control (no profile): the browser's own Gecko UA ===")
     _, requests = await probe(binary, {})
-    ok &= compare({"user-agent is Firefox": "Firefox/" in requests[0][1].get("user-agent", "")},
-                  {"user-agent is Firefox": True})
+    ua = requests[0][1].get("user-agent", "")
+    # An unconfigured build names itself (".../Camoufox/<version>"); what
+    # matters is that it is a Gecko UA, not the phone's Chrome one.
+    ok &= compare({"user-agent is Gecko's": "Gecko/20100101" in ua and "Chrome/" not in ua},
+                  {"user-agent is Gecko's": True})
     print("\nPASS" if ok else "\nFAIL")
     return ok
 

@@ -95,7 +95,7 @@ values written in `CAMOU_CONFIG`.
 - `patches/android/android-02-navigator.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L1-26
   - `dom/base/AndroidDevice.h`: L1-31
-  - `dom/base/Navigator.cpp`: L9, L564-571, L774-778
+  - `dom/base/Navigator.cpp`: L9, L564-571, L580-584, L779-783
   - `dom/base/Navigator.h`: L180
   - `dom/base/moz.build`: L562-569
   - `dom/webidl/Navigator.webidl`: L310-318
@@ -145,10 +145,10 @@ Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
   - `dom/base/AndroidDevice.cpp`: L26-28
   - `dom/base/AndroidDevice.h`: L27-29
   - `dom/base/ContactsManager.cpp`: L1-90
-  - `dom/base/ContactsManager.h`: L1-82
-  - `dom/base/NDEFReader.cpp`: L1-345
-  - `dom/base/NDEFReader.h`: L1-165
-  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2390-2396
+  - `dom/base/ContactsManager.h`: L1-83
+  - `dom/base/NDEFReader.cpp`: L1-346
+  - `dom/base/NDEFReader.h`: L1-167
+  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2395-2401
   - `dom/base/Navigator.h`: L89, L237-238, L320
   - `dom/base/moz.build`: L566-572, L575-576
   - `dom/base/nsGlobalWindowInner.h`: L600-615
@@ -175,12 +175,14 @@ full-version-list) are gated by `clientHints:sendHighEntropy`, which the
 profile sets. Without `userAgentData:brands` there are no client hints at all.
 
 - `patches/android/android-05-client-hints.patch` (patch; lines in the patched source tree):
-  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L782-789
+  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L787-794
   - `dom/base/Navigator.h`: L45, L183, L332
   - `dom/base/NavigatorUAData.cpp`: L1-119
   - `dom/base/NavigatorUAData.h`: L1-54
   - `dom/base/moz.build`: L579-585
+  - `dom/webidl/Navigator.webidl`: L318-319
   - `dom/webidl/NavigatorUAData.webidl`: L1-56
+  - `dom/webidl/WorkerNavigator.webidl`: L15
   - `dom/webidl/moz.build`: L845
   - `dom/workers/WorkerNavigator.cpp`: L8, L60, L92-93, L264-274
   - `dom/workers/WorkerNavigator.h`: L33, L55, L114
@@ -250,6 +252,7 @@ the legacy touch APIs Android has are enabled through `device:prefs`.
 
 - `patches/android/android-08-touch.patch` (patch; lines in the patched source tree):
   - `dom/base/nsContentUtils.cpp`: L10022-10039, L10042
+  - `dom/events/EventStateManager.cpp`: L73, L6255-6260
   - `dom/events/PointerEvent.cpp`: L15, L237-242
   - `dom/events/PointerEventHandler.cpp`: L26-27, L982-985, L1001-1016, L1059-1065
   - `dom/events/Touch.cpp`: L7-13, L237-338
@@ -276,13 +279,13 @@ Captures stream synthetic frames and tone -- never the host's devices -- and
 `facingMode` constraints select the matching camera.
 
 - `patches/android/android-09-media-devices.patch` (patch; lines in the patched source tree):
-  - `dom/bindings/Bindings.conf`: L400-404
-  - `dom/media/AndroidMediaDevices.cpp`: L1-296
+  - `dom/bindings/Bindings.conf`: L400-404, L505-510
+  - `dom/media/AndroidMediaDevices.cpp`: L1-298
   - `dom/media/AndroidMediaDevices.h`: L1-66
   - `dom/media/MediaDeviceInfo.cpp`: L7, L9, L43-71
-  - `dom/media/MediaDeviceInfo.h`: L10, L22-23, L42-44, L50, L52-71
+  - `dom/media/MediaDeviceInfo.h`: L9, L11, L23-24, L43-45, L51, L53-72
   - `dom/media/MediaDevices.cpp`: L7, L347-379, L538, L540-559
-  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1195, L2437-2466, L3477-3483
+  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1194, L2436-2465, L3476-3482
   - `dom/media/moz.build`: L264
   - `dom/media/webrtc/MediaEngineFake.cpp`: L7-8, L89-92, L141-143, L146-149, L153-156, L164, L186, L217-220, L635-636
   - `dom/webidl/InputDeviceInfo.webidl`: L1-15
@@ -304,6 +307,7 @@ dischargingTime 14400, through the existing `battery:*` keys.
 - `patches/android/android-10-battery.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L6-7, L31-40
   - `dom/base/AndroidDevice.h`: L30-32
+  - `dom/battery/BatteryManager.h`: L10
   - `dom/webidl/BatteryManager.webidl`: L12-15
   - `dom/webidl/Navigator.webidl`: L137-140
 - `additions/camoucfg/DeviceProfiles.cpp`: L154-159
@@ -445,11 +449,12 @@ reports empty adapter info and the host GPU's features and limits. Adapter
 selection ignores `powerPreference`: there is one GPU.
 
 - `patches/android/android-17-webgpu.patch` (patch; lines in the patched source tree):
-  - `dom/webgpu/Adapter.cpp`: L15, L26-49, L63-65, L89-91, L103-105, L296-365, L441-455
+  - `dom/webgpu/Adapter.cpp`: L15, L17, L27-50, L64-66, L90-92, L104-106, L286-293, L305-374, L450-464
   - `dom/webgpu/Adapter.h`: L60-65
   - `dom/webgpu/Instance.cpp`: L7-8, L32-36
   - `dom/webgpu/Instance.h`: L65-67, L75-76
   - `dom/webgpu/moz.build`: L121-123
+  - `dom/webidl/WebGPU.webidl`: L162-166
 - `additions/camoucfg/DeviceProfiles.cpp`: L149-204, L293-297
 - `settings/camoucfg.jvv`: L375-387
 - `settings/properties.json`: L153-162
@@ -467,7 +472,9 @@ the same contact geometry. There is still only one pointer, and Gecko's
 compatibility mouse events and the click follow as before.
 
 - `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
-  - `dom/events/PointerEventHandler.cpp`: L7-8, L28-31, L992-1084, L1485-1491
+  - `dom/events/PointerEventHandler.cpp`: L26-29, L990-1082, L1483-1489
+  - `dom/events/Touch.cpp`: L305-309, L313, L344-352
+  - `dom/events/Touch.h`: L88-91
 - `tests/patches/android-touch-trusted.py`: new file, L1-94
 
 ## Task 19 - mediump at half precision
@@ -487,7 +494,7 @@ everything without the option.
   - `dom/canvas/WebGLShaderValidator.cpp`: L7-8, L75-79
   - `gfx/angle/checkout/include/GLSLANG/ShaderLang.h`: L421-424
   - `gfx/angle/checkout/src/compiler/translator/Compiler.cpp`: L28, L865-873
-  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-476
+  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-480
   - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h`: L1-28
   - `gfx/angle/targets/translator/moz.build`: L230
 - `additions/camoucfg/DeviceProfiles.cpp`: L94-95
@@ -527,6 +534,8 @@ request type (document, image, same-origin and cross-site fetch).
 `Accept-Encoding` keeps Gecko's per-scheme values, which are Chrome's too
 (br and zstd only over HTTPS).
 
+- `patches/android/android-21-fetch-metadata.patch` (patch; lines in the patched source tree):
+  - `netwerk/protocol/http/nsHttpHandler.cpp`: L1983-1986, L1990, L2008
 - `additions/camoucfg/DeviceProfiles.cpp`: L313-320
 - `additions/camoucfg/UAClientHints.hpp`: L108-115
 - `tests/patches/android-fetch-metadata.py`: new file, L1-100
@@ -642,3 +651,74 @@ keys. OfflineAudioContext keeps the rate it is given.
 - `settings/camoucfg.jvv`: L397-398
 - `settings/properties.json`: L172-173
 - `tests/patches/android-media-timing.py`: new file, L1-59
+
+## Task 29 - Camera2 controls and Image Capture
+
+The phone's cameras take Chrome on Android's Image Capture surface, ported from
+Blink's `ImageCapture` and Chrome's `VideoCaptureCamera2` (155.0.8059.16):
+`getSupportedConstraints()` reports Chrome's 36 properties instead of Firefox's
+(no `mediaSource` / `browserWindow` / `scrollWithPage` / `viewport*`); a camera
+track's capabilities and settings carry white balance, exposure and focus modes,
+exposure compensation and time, colour temperature, ISO, focus distance, zoom
+and torch, with Chrome's float rounding, plus `aspectRatio`; `applyConstraints()`
+checks and applies them by Blink's rules (zoom snaps to a whole-pixel sensor
+crop, compensation to the 1/6 EV step, mixing with other constraints is an
+OverconstrainedError); `ImageCapture` exists with Chrome's shape -- photo
+capabilities and settings, `takePhoto()` as a JPEG at the camera's JPEG size,
+`grabFrame()` -- in place of Firefox's pref-gated EventTarget version. Capture
+frames are a noisy, unevenly lit scene instead of Firefox's test pattern.
+Elsewhere Firefox's shapes are kept: its own supported constraints, no
+ImageCapture, and no Image Capture members in `getConstraints()`. ISO and
+exposure-time limits are representative Pixel values, not a Pixel 10 dump.
+
+- `patches/android/android-29-camera2-image-capture.patch` (patch; lines in the patched source tree):
+  - `dom/media/AndroidCameraControls.h`: L1-142
+  - `dom/media/AndroidMediaDevices.cpp`: L7-8, L12, L16-17, L25-26, L30-36, L43, L47-60, L63-64, L97-117, L120-122, L135, L148-155, L162-193, L204, L250-299, L349, L365-366, L386, L392-396, L419-1472
+  - `dom/media/MediaDevices.cpp`: L20, L50-51, L54-120
+  - `dom/media/MediaManager.cpp`: L874-878, L1183-1197, L1336-1337, L1845-1847
+  - `dom/media/MediaManager.h`: L12, L172-174, L199-200
+  - `dom/media/MediaStreamTrack.cpp`: L12, L14-16, L325-327, L365-401
+  - `dom/media/MediaStreamTrack.h`: L24-25, L210-213
+  - `dom/media/imagecapture/CaptureTask.cpp`: L1-2, L9, L23, L30-32, L39-41, L44, L46-49, L53-54, L83-84, L88-89, L92-96
+  - `dom/media/imagecapture/CaptureTask.h`: L1-2, L10-11, L22-25, L27-29, L35-40, L52-54, L56-58, L62, L65-66
+  - `dom/media/imagecapture/ImageCapture.cpp`: L1-2, L10-12, L14-37, L39-58, L60-91, L94, L96-98, L100-102, L104-105, L107-109, L112, L115-116, L121-122, L125, L128-131, L133-134, L136-138, L140-146, L148-151, L153-164, L167-170, L172-183, L186-190, L192-214, L217-220, L222-241, L244
+  - `dom/media/imagecapture/ImageCapture.h`: L1-2, L10, L12-17, L21-22, L27, L30-34, L36, L38-39, L45-50, L52-70
+  - `dom/media/moz.build`: L226
+  - `dom/media/systemservices/FakeVideoSource.cpp`: L7-9, L12, L25-27, L94, L167-178, L229-316
+  - `dom/media/systemservices/FakeVideoSource.h`: L31-35, L55, L71-78
+  - `dom/media/webrtc/MediaEngineFake.cpp`: L280
+  - `dom/webidl/ImageCapture.webidl`: L12-16, L18-48, L50-57
+  - `dom/webidl/MediaStreamTrack.webidl`: L69-82, L105-126
+  - `dom/webidl/MediaTrackCapabilities.webidl`: L53, L56-60
+  - `dom/webidl/MediaTrackSettings.webidl`: L12-15, L26-38
+  - `dom/webidl/MediaTrackSupportedConstraints.webidl`: L9-12, L14-54, L61, L66-71
+- `additions/camoucfg/DeviceProfiles.cpp`: L224-251, L258-277, L283, L286-305
+- `settings/camoucfg.jvv`: L364-382
+- `tests/patches/android-camera2.py`: new file, L1-295
+- `tests/patches/android-media-devices.py`: L16-17
+
+## Fixes after the first build of all tasks together
+
+Tasks 0-28 were first compiled and tested together after they were merged. The fixes are follow-up commits, one per task (see the git log). Patches: each task's section above already points into the current patch. Other files, with the lines those fixes changed, as the files were after the last fix (73be997):
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L297
+- `tests/patches/android-api-stubs.py`: L13-16, L62, L87, L101-108, L110-112, L114-118
+- `tests/patches/android-canvas-exact.py`: L56-61, L63, L66, L68, L70
+- `tests/patches/android-canvas-text.py`: L10-13, L68
+- `tests/patches/android-client-hints.py`: L63, L76-77, L80-81, L83
+- `tests/patches/android-media-capabilities.py`: L28, L39, L41, L44-45, L47
+- `tests/patches/android-media-devices.py`: L26-33, L35, L59-62, L64
+- `tests/patches/android-network-headers.py`: L125, L127-131
+- `tests/patches/android-permissions.py`: L6-8, L59, L61-62
+- `tests/patches/android-storage.py`: L31-34, L40
+- `tests/patches/android-touch.py`: L18-20, L86-87, L89-93, L96-99, L101, L103-104, L153
+- `tests/patches/android-voices.py`: L14-20, L65-72, L74-75, L77, L93
+- `tests/patches/android-webgl.py`: L98-103, L105-106, L108
+- `tests/patches/android-webgpu.py`: L61-66, L68-69, L71
+- `tests/patches/helpers.py`: L99-102, L109-110
+
+## Fixes after Task 29
+
+Follow-up fix commits after Task 29 (see the git log). Patches: each task's section above points into the current patch. Other files, with the lines those fixes changed, as the files are now:
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L414-418

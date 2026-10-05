@@ -10,8 +10,10 @@ says "desktop". With {"device:profile": "pixel10"}:
     permission on a device nobody is holding), and NDEFRecord/NDEFMessage
     round-tripping their init dictionaries;
   * Contact Picker: navigator.contacts (ContactsManager), getProperties()
-    resolving Chrome's five properties, select() requiring user activation;
-    ContactAddress present;
+    resolving Chrome's five properties, select() rejecting SecurityError
+    without user activation (called from the page's own script at load) and
+    resolving with it (Juggler, like Chromium, evaluates with a user gesture;
+    the picker is dismissed at once); ContactAddress present;
   * window.orientation (0), window.onorientationchange,
     window.ondeviceorientationabsolute.
 
@@ -57,7 +59,7 @@ PROBE = r"""async () => {
   out['event.serialNumber'] = ev.serialNumber;
 
   out['contacts.getProperties()'] = await navigator.contacts.getProperties();
-  out['contacts.select() without activation'] = await reject(navigator.contacts.select(['name']));
+  out['contacts.select() with activation'] = await reject(navigator.contacts.select(['name']));
   return out;
 }"""
 
@@ -82,6 +84,7 @@ EXPECTED = {
     "empty recordType": "TypeError",
     "event.serialNumber": "04:a2",
     "contacts.getProperties()": ["address", "email", "icon", "name", "tel"],
+    "contacts.select() with activation": "resolved",
     "contacts.select() without activation": "SecurityError",
 }
 
@@ -95,11 +98,24 @@ CONTROL = {
 }
 
 
+# Runs at load, before anything could give the page user activation.
+PAGE = """<!doctype html><title>stubs</title><script>
+window.selectWithoutGesture = navigator.contacts
+  ? navigator.contacts.select(['name']).then(() => 'resolved', e => e.name)
+  : Promise.resolve('absent');
+</script>"""
+
+
 async def probe(binary, config):
-    with PageServer({"/": ("text/html", "<!doctype html><title>stubs</title>")}) as server:
-        async with launch_raw(binary, config) as page:
+    with PageServer({"/": ("text/html", PAGE)}) as server:
+        # allowMainWorld only unlocks the guard's own "mw:" read of the result.
+        async with launch_raw(binary, dict(config, allowMainWorld=True)) as page:
             await page.goto(server.url("/"))
-            return await page.evaluate(PROBE)
+            out = await page.evaluate(PROBE)
+            if out.get("navigator.contacts"):
+                out["contacts.select() without activation"] = await page.evaluate(
+                    "mw:window.selectWithoutGesture")
+            return out
 
 
 async def main(binary) -> bool:
