@@ -716,3 +716,9 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 - `tests/patches/android-webgl.py`: L98-103, L105-106, L108
 - `tests/patches/android-webgpu.py`: L61-66, L68-69, L71
 - `tests/patches/helpers.py`: L99-102, L109-110
+
+## Fixes after Task 29
+
+Follow-up fix commits after Task 29 (see the git log). Patches: each task's section above points into the current patch. Other files, with the lines those fixes changed, as the files are now:
+
+- `additions/camoucfg/DeviceProfiles.cpp`: L414-418

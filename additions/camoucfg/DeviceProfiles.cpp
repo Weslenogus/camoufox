@@ -411,6 +411,11 @@ static nlohmann::json Pixel10() {
       // grayscale on Windows builds (fontconfig builds drop the subpixel
       // order from the font pattern instead).
       {"gfx.font_rendering.cleartype_params.cleartype_level", 0},
+      // A phone always has WebGL. Packaged builds ship without glxtest
+      // (scripts/package.py), and without that probe Gecko's GL blocklist
+      // turns WebGL off: the camoufox Python package forces it on, and the
+      // profile does too, for launches that bypass it.
+      {"webgl.force-enabled", true},
       // WebGPU ships in Chrome on Android, in windows and every worker; a
       // phone always has it, so the host's GPU blocklist is not consulted.
       // Chrome's Accept headers for documents and images (scripts, styles
