@@ -60,17 +60,17 @@ with the emulation is never reused without it. The switch is set in
 - `patches/android/android-01-arm-default-nan.patch` (patch; lines in the patched source tree):
   - `js/public/ArmNaN.h`: L1-29
   - `js/src/builtin/DataViewObject.cpp`: L578
-  - `js/src/jit/CacheIRCompiler.cpp`: L7688-7690, L8217-8219
+  - `js/src/jit/CacheIRCompiler.cpp`: L7747-7749, L8276-8278
   - `js/src/jit/TypePolicy.cpp`: L948-950
-  - `js/src/jsapi.cpp`: L41, L5127-5128, L5138-5141
+  - `js/src/jsapi.cpp`: L41, L5171-5172, L5182-5185
   - `js/src/moz.build`: L102
   - `js/src/util/DifferentialTesting.h`: L23-48
   - `js/src/vm/TypedArrayObject-inl.h`: L668-670
-  - `js/src/vm/TypedArrayObject.cpp`: L1273, L3114, L3950
-  - `js/src/wasm/WasmBaselineCompile.cpp`: L144-145, L3010-3048, L3050, L3054, L3058, L3062, L3112, L3116, L3120, L3124, L3128, L3179
-  - `js/src/wasm/WasmIonCompile.cpp`: L909-946, L1548-1550, L5987, L6912-6921, L7039, L7050, L7119, L7121-7122, L7134, L10394, L10423
-  - `js/src/wasm/WasmModule.cpp`: L250, L269-274
-  - `js/xpconnect/src/XPCJSContext.cpp`: L9-11, L1241-1247
+  - `js/src/vm/TypedArrayObject.cpp`: L1275, L3116, L3952
+  - `js/src/wasm/WasmBaselineCompile.cpp`: L144-145, L3023-3061, L3063, L3067, L3071, L3075, L3125, L3129, L3133, L3137, L3141, L3192
+  - `js/src/wasm/WasmIonCompile.cpp`: L896-933, L5974, L6829, L6840, L6869-6878, L6909, L6911-6912, L6924, L10228, L10257
+  - `js/src/wasm/WasmModule.cpp`: L243, L262-267
+  - `js/xpconnect/src/XPCJSContext.cpp`: L9-11, L1245-1251
   - `js/xpconnect/src/moz.build`: L79-81
 - `settings/camoucfg.jvv`: L315-316
 - `settings/properties.json`: L115-116
@@ -95,12 +95,12 @@ values written in `CAMOU_CONFIG`.
 - `patches/android/android-02-navigator.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L1-26
   - `dom/base/AndroidDevice.h`: L1-31
-  - `dom/base/Navigator.cpp`: L9, L564-571, L580-584, L779-783
-  - `dom/base/Navigator.h`: L180
-  - `dom/base/moz.build`: L562-569
+  - `dom/base/Navigator.cpp`: L9, L564-571, L580-584, L788-792
+  - `dom/base/Navigator.h`: L181
+  - `dom/base/moz.build`: L577-584
   - `dom/webidl/Navigator.webidl`: L310-318
   - `dom/webidl/WorkerNavigator.webidl`: L14
-  - `dom/workers/WorkerNavigator.cpp`: L7, L260-265
+  - `dom/workers/WorkerNavigator.cpp`: L7, L266-271
   - `dom/workers/WorkerNavigator.h`: L111
 - `settings/camoucfg.jvv`: L37-38
 - `settings/properties.json`: L15-16
@@ -122,8 +122,8 @@ since M148.
 
 - `additions/camoucfg/DeviceProfiles.cpp`: L40-47
 - `patches/android/android-03-desktop-apis.patch` (patch; lines in the patched source tree):
-  - `modules/libpref/Preferences.cpp`: L12-13, L4177-4212, L4217
-  - `modules/libpref/moz.build`: L186-188
+  - `modules/libpref/Preferences.cpp`: L12-13, L4985-5020, L5025
+  - `modules/libpref/moz.build`: L185-187
 - `settings/camoucfg.jvv`: L318-321
 - `settings/properties.json`: L118
 - `tests/patches/android-desktop-apis.py`: new file, L1-82
@@ -144,20 +144,20 @@ Gecko only builds for Android. `ondeviceorientationabsolute` already exists.
 - `patches/android/android-04-android-apis.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L26-28
   - `dom/base/AndroidDevice.h`: L27-29
-  - `dom/base/ContactsManager.cpp`: L1-90
+  - `dom/base/ContactsManager.cpp`: L1-91
   - `dom/base/ContactsManager.h`: L1-83
   - `dom/base/NDEFReader.cpp`: L1-346
   - `dom/base/NDEFReader.h`: L1-167
-  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2395-2401
-  - `dom/base/Navigator.h`: L89, L237-238, L320
-  - `dom/base/moz.build`: L566-572, L575-576
-  - `dom/base/nsGlobalWindowInner.h`: L600-615
-  - `dom/bindings/Bindings.conf`: L123-127, L579-591
+  - `dom/base/Navigator.cpp`: L10, L173, L258-259, L2404-2410
+  - `dom/base/Navigator.h`: L90, L238-239, L321
+  - `dom/base/moz.build`: L581-587, L590-591
+  - `dom/base/nsGlobalWindowInner.h`: L602-617
+  - `dom/bindings/Bindings.conf`: L123-127, L584-596
   - `dom/webidl/ContactsManager.webidl`: L1-54
   - `dom/webidl/NDEFReader.webidl`: L1-102
   - `dom/webidl/Navigator.webidl`: L319-326
-  - `dom/webidl/Window.webidl`: L716, L718, L722-726, L728
-  - `dom/webidl/moz.build`: L499, L845
+  - `dom/webidl/Window.webidl`: L719, L721, L725-729, L731
+  - `dom/webidl/moz.build`: L500, L848
 - `tests/patches/android-api-stubs.py`: new file, L1-115
 
 ## Task 5 - User-Agent Client Hints
@@ -175,18 +175,18 @@ full-version-list) are gated by `clientHints:sendHighEntropy`, which the
 profile sets. Without `userAgentData:brands` there are no client hints at all.
 
 - `patches/android/android-05-client-hints.patch` (patch; lines in the patched source tree):
-  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L787-794
-  - `dom/base/Navigator.h`: L45, L183, L332
+  - `dom/base/Navigator.cpp`: L11, L183, L287-288, L796-803
+  - `dom/base/Navigator.h`: L47, L184, L333
   - `dom/base/NavigatorUAData.cpp`: L1-119
   - `dom/base/NavigatorUAData.h`: L1-54
-  - `dom/base/moz.build`: L579-585
+  - `dom/base/moz.build`: L594-600
   - `dom/webidl/Navigator.webidl`: L318-319
   - `dom/webidl/NavigatorUAData.webidl`: L1-56
   - `dom/webidl/WorkerNavigator.webidl`: L15
-  - `dom/webidl/moz.build`: L845
-  - `dom/workers/WorkerNavigator.cpp`: L8, L60, L92-93, L264-274
+  - `dom/webidl/moz.build`: L848
+  - `dom/workers/WorkerNavigator.cpp`: L8, L60, L97-98, L270-280
   - `dom/workers/WorkerNavigator.h`: L33, L55, L114
-  - `netwerk/protocol/http/nsHttpHandler.cpp`: L17-18, L750-764
+  - `netwerk/protocol/http/nsHttpHandler.cpp`: L17-18, L749-763
 - `additions/camoucfg/DeviceProfiles.cpp`: L40-65
 - `additions/camoucfg/UAClientHints.hpp`: new file, L1-118
 - `settings/camoucfg.jvv`: L322-338
@@ -210,8 +210,8 @@ radians). The timer runs only while a page listens.
 
 - `patches/android/android-06-sensors.patch` (patch; lines in the patched source tree):
   - `dom/system/moz.build`: L85-87
-  - `dom/system/nsDeviceSensors.cpp`: L9-13, L110-112, L114-116, L165-170, L191-195, L582-845
-  - `dom/system/nsDeviceSensors.h`: L10, L18-19, L66-75
+  - `dom/system/nsDeviceSensors.cpp`: L9-13, L110-112, L114-116, L179-184, L205-209, L449-450, L452-454, L647-910
+  - `dom/system/nsDeviceSensors.h`: L10, L19-20, L58-62, L77-86
 - `settings/camoucfg.jvv`: L338-343
 - `settings/properties.json`: L131-136
 - `tests/patches/android-sensors.py`: new file, L1-144
@@ -229,10 +229,10 @@ formats in COMPRESSED_TEXTURE_FORMATS, and correctly sized uploads succeed
 `webGl:astcProfiles`. S3TC, a desktop format, is not offered.
 
 - `patches/android/android-07-webgl.patch` (patch; lines in the patched source tree):
-  - `dom/canvas/ClientWebGLContext.cpp`: L6202-6209
+  - `dom/canvas/ClientWebGLContext.cpp`: L2299-2306, L6707-6714
   - `dom/canvas/WebGLAstcEmulation.h`: L1-49
   - `dom/canvas/WebGLExtensions.cpp`: L7-8, L207, L209-210
-  - `dom/canvas/WebGLTextureUpload.cpp`: L7-8, L584-588, L676-694, L712-717
+  - `dom/canvas/WebGLTextureUpload.cpp`: L7-8, L644-648, L736-754, L772-777
 - `additions/camoucfg/DeviceProfiles.cpp`: L12-13, L68-130
 - `settings/camoucfg.jvv`: L343-345
 - `settings/properties.json`: L136-138
@@ -251,13 +251,13 @@ and the click still lands. The input media features are a phone's:
 the legacy touch APIs Android has are enabled through `device:prefs`.
 
 - `patches/android/android-08-touch.patch` (patch; lines in the patched source tree):
-  - `dom/base/nsContentUtils.cpp`: L10022-10039, L10042
-  - `dom/events/EventStateManager.cpp`: L73, L6255-6260
+  - `dom/base/nsContentUtils.cpp`: L10650-10667, L10670
+  - `dom/events/EventStateManager.cpp`: L75, L6427-6432
   - `dom/events/PointerEvent.cpp`: L15, L237-242
-  - `dom/events/PointerEventHandler.cpp`: L26-27, L982-985, L1001-1016, L1059-1065
+  - `dom/events/PointerEventHandler.cpp`: L26-27, L1041-1044, L1060-1075, L1118-1124
   - `dom/events/Touch.cpp`: L7-13, L237-338
   - `dom/events/Touch.h`: L75-88
-  - `layout/style/nsMediaFeatures.cpp`: L444-450
+  - `layout/style/nsMediaFeatures.cpp`: L470-476
 - `additions/camoucfg/DeviceProfiles.cpp`: L137-139
 - `settings/camoucfg.jvv`: L345-349
 - `settings/properties.json`: L138-142
@@ -279,18 +279,18 @@ Captures stream synthetic frames and tone -- never the host's devices -- and
 `facingMode` constraints select the matching camera.
 
 - `patches/android/android-09-media-devices.patch` (patch; lines in the patched source tree):
-  - `dom/bindings/Bindings.conf`: L400-404, L505-510
+  - `dom/bindings/Bindings.conf`: L400-404, L510-515
   - `dom/media/AndroidMediaDevices.cpp`: L1-298
   - `dom/media/AndroidMediaDevices.h`: L1-66
   - `dom/media/MediaDeviceInfo.cpp`: L7, L9, L43-71
   - `dom/media/MediaDeviceInfo.h`: L9, L11, L23-24, L43-45, L51, L53-72
   - `dom/media/MediaDevices.cpp`: L7, L347-379, L538, L540-559
-  - `dom/media/MediaManager.cpp`: L7, L1174-1177, L1183-1194, L2436-2465, L3476-3482
-  - `dom/media/moz.build`: L264
-  - `dom/media/webrtc/MediaEngineFake.cpp`: L7-8, L89-92, L141-143, L146-149, L153-156, L164, L186, L217-220, L635-636
+  - `dom/media/MediaManager.cpp`: L7, L1175-1178, L1184-1195, L2458-2487, L3519-3525
+  - `dom/media/moz.build`: L269
+  - `dom/media/webrtc/MediaEngineFake.cpp`: L10-11, L92-95, L144-146, L149-152, L156-159, L167, L189, L220-223, L710-711
   - `dom/webidl/InputDeviceInfo.webidl`: L1-15
   - `dom/webidl/MediaTrackCapabilities.webidl`: L9, L22-33, L37, L41-42, L51-57
-  - `dom/webidl/moz.build`: L770
+  - `dom/webidl/moz.build`: L772
 - `additions/camoucfg/DeviceProfiles.cpp`: L131-153
 - `settings/camoucfg.jvv`: L349-365
 - `settings/properties.json`: L142-143
@@ -307,7 +307,9 @@ dischargingTime 14400, through the existing `battery:*` keys.
 - `patches/android/android-10-battery.patch` (patch; lines in the patched source tree):
   - `dom/base/AndroidDevice.cpp`: L6-7, L31-40
   - `dom/base/AndroidDevice.h`: L30-32
+  - `dom/battery/BatteryManager.cpp`: L11, L55-57, L74-76, L94-96, L114-116
   - `dom/battery/BatteryManager.h`: L10
+  - `dom/battery/moz.build`: L22-23
   - `dom/webidl/BatteryManager.webidl`: L12-15
   - `dom/webidl/Navigator.webidl`: L137-140
 - `additions/camoucfg/DeviceProfiles.cpp`: L154-159
@@ -323,10 +325,11 @@ orientation media query follows it; `env(safe-area-inset-*)` resolves to the
 configured insets (24 px top and bottom) instead of the host's zeros.
 
 - `patches/android/android-11-screen.patch` (patch; lines in the patched source tree):
-  - `dom/base/ScreenOrientation.cpp`: L7-8, L696-731, L733-735, L750-752, L775-778, L797-800
-  - `dom/base/nsScreen.cpp`: L218-222
-  - `layout/style/GeckoBindings.cpp`: L9-10, L1785-1795
-  - `layout/style/nsMediaFeatures.cpp`: L233-242
+  - `dom/base/ScreenOrientation.cpp`: L7-8, L708-743, L745-747, L765-767, L792-795, L815-818
+  - `dom/base/nsGlobalWindowInner.cpp`: L3769-3775, L3782-3786
+  - `dom/base/nsScreen.cpp`: L219-223
+  - `layout/style/GeckoBindings.cpp`: L9-10, L1735-1745
+  - `layout/style/nsMediaFeatures.cpp`: L259-268
 - `additions/camoucfg/DeviceProfiles.cpp`: L154-178
 - `settings/camoucfg.jvv`: L365-371
 - `settings/properties.json`: L143-149
@@ -346,8 +349,8 @@ as Arial do not resolve; the generic-family prefs come through `device:prefs`.
 
 - `patches/android/android-12-fonts.patch` (patch; lines in the patched source tree):
   - `browser/fonts/moz.build`: L8-24
-  - `gfx/thebes/gfxPlatformFontList.cpp`: L2311-2315
-  - `layout/base/nsLayoutUtils.cpp`: L9771, L9773, L9800-9805
+  - `gfx/thebes/gfxPlatformFontList.cpp`: L2310-2314
+  - `layout/base/nsLayoutUtils.cpp`: L9845, L9847, L9870-9876
 - `additions/camoucfg/DeviceProfiles.cpp`: L194-212, L214-217
 - `additions/browser/fonts/android/README.md`: new file, L1-17
 - `additions/browser/fonts/android/LICENSE-OFL.txt`: new file, L1-94
@@ -412,8 +415,8 @@ through the new `js/AutomationFrames.h`.
 - `patches/android/android-15-automation.patch` (patch; lines in the patched source tree):
   - `js/public/AutomationFrames.h`: L1-30
   - `js/src/moz.build`: L106
-  - `js/src/vm/SavedStacks.cpp`: L18, L618-647, L651-654, L734-735, L2182-2185
-  - `js/xpconnect/src/XPCJSContext.cpp`: L11, L1248-1252
+  - `js/src/vm/SavedStacks.cpp`: L18, L619-648, L652-655, L735-736, L2180-2183
+  - `js/xpconnect/src/XPCJSContext.cpp`: L11, L1252-1256
 - `additions/camoucfg/DeviceProfiles.cpp`: L34-36
 - `settings/camoucfg.jvv`: L371-372
 - `settings/properties.json`: L149-150
@@ -429,7 +432,7 @@ powerEfficient false. Larger or faster configurations and other codecs keep
 Gecko's own answer.
 
 - `patches/android/android-16-media-capabilities.patch` (patch; lines in the patched source tree):
-  - `dom/media/mediacapabilities/MediaCapabilities.cpp`: L7-8, L711-762, L803-809
+  - `dom/media/mediacapabilities/MediaCapabilities.cpp`: L7-8, L819-870, L911-917
   - `dom/media/mediacapabilities/moz.build`: L17-19
 - `additions/camoucfg/DeviceProfiles.cpp`: L197-202
 - `settings/camoucfg.jvv`: L372-375
@@ -449,7 +452,7 @@ reports empty adapter info and the host GPU's features and limits. Adapter
 selection ignores `powerPreference`: there is one GPU.
 
 - `patches/android/android-17-webgpu.patch` (patch; lines in the patched source tree):
-  - `dom/webgpu/Adapter.cpp`: L15, L17, L27-50, L64-66, L90-92, L104-106, L286-293, L305-374, L450-464
+  - `dom/webgpu/Adapter.cpp`: L15, L17, L27-50, L64-66, L90-92, L104-106, L284-291, L303-372, L448-462
   - `dom/webgpu/Adapter.h`: L60-65
   - `dom/webgpu/Instance.cpp`: L7-8, L32-36
   - `dom/webgpu/Instance.h`: L65-67, L75-76
@@ -472,7 +475,7 @@ the same contact geometry. There is still only one pointer, and Gecko's
 compatibility mouse events and the click follow as before.
 
 - `patches/android/android-18-touch-trusted.patch` (patch; lines in the patched source tree):
-  - `dom/events/PointerEventHandler.cpp`: L26-29, L990-1082, L1483-1489
+  - `dom/events/PointerEventHandler.cpp`: L26-29, L1049-1141, L1542-1548
   - `dom/events/Touch.cpp`: L305-309, L313, L344-352
   - `dom/events/Touch.h`: L88-91
 - `tests/patches/android-touch-trusted.py`: new file, L1-94
@@ -492,11 +495,11 @@ everything without the option.
 
 - `patches/android/android-19-mediump-precision.patch` (patch; lines in the patched source tree):
   - `dom/canvas/WebGLShaderValidator.cpp`: L7-8, L75-79
-  - `gfx/angle/checkout/include/GLSLANG/ShaderLang.h`: L421-424
-  - `gfx/angle/checkout/src/compiler/translator/Compiler.cpp`: L28, L865-873
-  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-480
-  - `gfx/angle/checkout/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h`: L1-28
-  - `gfx/angle/targets/translator/moz.build`: L230
+  - `third_party/angle/include/GLSLANG/ShaderLang.h`: L490-493
+  - `third_party/angle/src/compiler/translator/Compiler.cpp`: L30, L904-912
+  - `third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.cpp`: L1-480
+  - `third_party/angle/src/compiler/translator/tree_ops/EmulateMediumpPrecision.h`: L1-28
+  - `third_party/angle/translator_gn/moz.build`: L96
 - `additions/camoucfg/DeviceProfiles.cpp`: L94-95
 - `settings/camoucfg.jvv`: L387-388
 - `settings/properties.json`: L162-163
@@ -513,7 +516,7 @@ profile: `effectiveType` "4g", `downlink` 10, `downlinkMax` Infinity, `rtt` 50,
 `saveData` false, `onchange`; `type` "wifi" (`navigator.connection.*`).
 
 - `patches/android/android-20-languages-connection.patch` (patch; lines in the patched source tree):
-  - `dom/network/Connection.cpp`: L12-16, L89-130
+  - `dom/network/Connection.cpp`: L12-16, L90-131
   - `dom/network/Connection.h`: L41-51
   - `dom/network/moz.build`: L54-56
   - `dom/webidl/NetworkInformation.webidl`: L21-28, L33-48
@@ -535,7 +538,7 @@ request type (document, image, same-origin and cross-site fetch).
 (br and zstd only over HTTPS).
 
 - `patches/android/android-21-fetch-metadata.patch` (patch; lines in the patched source tree):
-  - `netwerk/protocol/http/nsHttpHandler.cpp`: L1983-1986, L1990, L2008
+  - `netwerk/protocol/http/nsHttpHandler.cpp`: L1993-1996, L2000, L2018
 - `additions/camoucfg/DeviceProfiles.cpp`: L313-320
 - `additions/camoucfg/UAClientHints.hpp`: L108-115
 - `tests/patches/android-fetch-metadata.py`: new file, L1-100
@@ -554,9 +557,9 @@ info. `performance.now()` is pinned to 1 ms resolution in every realm
 - `patches/android/android-22-performance.patch` (patch; lines in the patched source tree):
   - `dom/performance/MemoryInfo.cpp`: L1-96
   - `dom/performance/MemoryInfo.h`: L1-58
-  - `dom/performance/Performance.cpp`: L7-8, L160-163
+  - `dom/performance/Performance.cpp`: L7-8, L168-171
   - `dom/performance/Performance.h`: L26, L86-88
-  - `dom/performance/moz.build`: L12, L38, L70-72
+  - `dom/performance/moz.build`: L12, L39, L72-74
   - `dom/webidl/Performance.webidl`: L60-74
 - `additions/camoucfg/DeviceProfiles.cpp`: L277-279, L324-326
 - `settings/camoucfg.jvv`: L394-395
@@ -574,7 +577,7 @@ therefore linear in the font size and identical across repeats and between
 a window and a worker's OffscreenCanvas.
 
 - `patches/android/android-23-canvas-text.patch` (patch; lines in the patched source tree):
-  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L8, L981-988
+  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L8, L1073-1080
 - `additions/camoucfg/DeviceProfiles.cpp`: L314-315
 - `tests/patches/android-canvas-text.py`: new file, L1-89
 
@@ -602,7 +605,7 @@ grayscale only, even on an opaque canvas. Windows builds get ClearType level
 0 (grayscale) through `device:prefs`.
 
 - `patches/android/android-25-grayscale-text.patch` (patch; lines in the patched source tree):
-  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L989-996
+  - `gfx/thebes/gfxFcPlatformFontList.cpp`: L1081-1088
 - `additions/camoucfg/DeviceProfiles.cpp`: L336-339
 - `tests/patches/android-text-aa.py`: new file, L1-89
 
@@ -628,7 +631,7 @@ still moves it -- and Chrome's `usageDetails` breakdown (a new
 
 - `patches/android/android-27-storage.patch` (patch; lines in the patched source tree):
   - `dom/quota/StorageManager.cpp`: L7-10, L484-500
-  - `dom/quota/moz.build`: L195-197
+  - `dom/quota/moz.build`: L205-207
   - `dom/webidl/StorageManager.webidl`: L25-27
 - `additions/camoucfg/DeviceProfiles.cpp`: L277-281
 - `settings/camoucfg.jvv`: L395-397
@@ -645,7 +648,7 @@ otherwise always reports 0) and `outputLatency` 0.021333 through the existing
 keys. OfflineAudioContext keeps the rate it is given.
 
 - `patches/android/android-28-media-timing.patch` (patch; lines in the patched source tree):
-  - `dom/media/webaudio/AudioContext.cpp`: L552-558
+  - `dom/media/webaudio/AudioContext.cpp`: L559-565
   - `dom/media/webaudio/AudioContext.h`: L192-196
 - `additions/camoucfg/DeviceProfiles.cpp`: L277-283, L372-373
 - `settings/camoucfg.jvv`: L397-398
@@ -675,18 +678,18 @@ exposure-time limits are representative Pixel values, not a Pixel 10 dump.
   - `dom/media/AndroidCameraControls.h`: L1-142
   - `dom/media/AndroidMediaDevices.cpp`: L7-8, L12, L16-17, L25-26, L30-36, L43, L47-60, L63-64, L97-117, L120-122, L135, L148-155, L162-193, L204, L250-299, L349, L365-366, L386, L392-396, L419-1472
   - `dom/media/MediaDevices.cpp`: L20, L50-51, L54-120
-  - `dom/media/MediaManager.cpp`: L874-878, L1183-1197, L1336-1337, L1845-1847
-  - `dom/media/MediaManager.h`: L12, L172-174, L199-200
-  - `dom/media/MediaStreamTrack.cpp`: L12, L14-16, L325-327, L365-401
+  - `dom/media/MediaManager.cpp`: L875-879, L1184-1198, L1343-1344, L1852-1854
+  - `dom/media/MediaManager.h`: L12, L174-176, L201-202
+  - `dom/media/MediaStreamTrack.cpp`: L12, L14-16, L327-329, L367-403
   - `dom/media/MediaStreamTrack.h`: L24-25, L210-213
   - `dom/media/imagecapture/CaptureTask.cpp`: L1-2, L9, L23, L30-32, L39-41, L44, L46-49, L53-54, L83-84, L88-89, L92-96
   - `dom/media/imagecapture/CaptureTask.h`: L1-2, L10-11, L22-25, L27-29, L35-40, L52-54, L56-58, L62, L65-66
   - `dom/media/imagecapture/ImageCapture.cpp`: L1-2, L10-12, L14-37, L39-58, L60-91, L94, L96-98, L100-102, L104-105, L107-109, L112, L115-116, L121-122, L125, L128-131, L133-134, L136-138, L140-146, L148-151, L153-164, L167-170, L172-183, L186-190, L192-214, L217-220, L222-241, L244
   - `dom/media/imagecapture/ImageCapture.h`: L1-2, L10, L12-17, L21-22, L27, L30-34, L36, L38-39, L45-50, L52-70
-  - `dom/media/moz.build`: L226
+  - `dom/media/moz.build`: L228
   - `dom/media/systemservices/FakeVideoSource.cpp`: L7-9, L12, L25-27, L94, L167-178, L229-316
   - `dom/media/systemservices/FakeVideoSource.h`: L31-35, L55, L71-78
-  - `dom/media/webrtc/MediaEngineFake.cpp`: L280
+  - `dom/media/webrtc/MediaEngineFake.cpp`: L283
   - `dom/webidl/ImageCapture.webidl`: L12-16, L18-48, L50-57
   - `dom/webidl/MediaStreamTrack.webidl`: L69-82, L105-126
   - `dom/webidl/MediaTrackCapabilities.webidl`: L53, L56-60
@@ -719,6 +722,16 @@ Tasks 0-28 were first compiled and tested together after they were merged. The f
 
 ## Fixes after Task 29
 
-Follow-up fix commits after Task 29 (see the git log). Patches: each task's section above points into the current patch. Other files, with the lines those fixes changed, as the files are now:
+Our follow-up commits after Task 29 (upstream merges excluded). Patches: each task's section above points into the current patch. Other files, with the lines each commit changed, as of that commit:
 
-- `additions/camoucfg/DeviceProfiles.cpp`: L414-418
+- f5588b6 Task 7: keep WebGL on in packaged builds:
+  - `additions/camoucfg/DeviceProfiles.cpp`: L414-418
+- d4089ea Port the Android patches to Firefox 156:
+  - `tests/patches/android-api-stubs.py`: L15-17, L118-120
+  - `tests/patches/android-arm-nan.py`: L20-21, L162-177, L229
+  - `tests/patches/android-touch.py`: L19-20, L153
+- aed7657 Pixel 10 preset: drop keys nothing reads any more:
+  - `additions/camoucfg/DeviceProfiles.cpp`: lines removed only
+- d549e91 CI: run the Android guards as their own patch-guard leg:
+  - `.github/workflows/tests.yml`: L851
+  - `ci/run_patch_guards.py`: L76-109
