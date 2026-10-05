@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Dict, Optional, Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -38,10 +39,12 @@ class Proxy:
         if not schema:
             schema = 'http'
         result = f"{schema}://"
+        # Percent-encode the credentials: a raw `#`, `/`, `?` or `@` breaks the
+        # URL, and a raw `%XX` is decoded into a different password.
         if self.username:
-            result += f"{self.username}"
+            result += quote(self.username, safe='')
             if self.password:
-                result += f":{self.password}"
+                result += f":{quote(self.password, safe='')}"
             result += "@"
 
         result += url
@@ -73,6 +76,34 @@ def valid_ipv6(ip: str) -> bool:
 def validate_ip(ip: str) -> None:
     if not valid_ipv4(ip) and not valid_ipv6(ip):
         raise InvalidIP(f"Invalid IP address: {ip}")
+
+
+def proxy_exit_geo(proxy: str) -> Tuple[str, str]:
+    """
+    The exit IP of `proxy` and that IP's timezone, looked up through the proxy.
+    Raises InvalidIP when the lookup fails: a context that silently kept the
+    host's WebRTC IP and timezone behind a proxy would be a leak.
+    """
+    try:
+        resp = requests.get(
+            "http://ip-api.com/json?fields=status,message,query,timezone",
+            proxies=Proxy.as_requests_proxy(proxy),
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.RequestException as exception:
+        raise InvalidIP(f"{PROXY_LOOKUP_FAILED}: {exception}") from exception
+    if data.get("status") != "success" or not data.get("timezone"):
+        raise InvalidIP(f"{PROXY_LOOKUP_FAILED}: {data.get('message') or data}")
+    validate_ip(data["query"])
+    return data["query"], data["timezone"]
+
+
+PROXY_LOOKUP_FAILED = (
+    "Could not look up the proxy's exit IP and timezone. Pass webrtc_ip and "
+    "timezone_id explicitly to skip the lookup"
+)
 
 
 @lru_cache(maxsize=None)
