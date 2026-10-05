@@ -13,7 +13,8 @@ reports what Chrome on a Pixel does:
     "camera2 0, facing back" -- with 64-hex-digit ids;
   * the back camera's capabilities: facingMode ["environment"], and, on a
     running track, zoom, torch, focusMode and exposureMode; the front camera
-    has facingMode ["user"] and neither zoom nor torch.
+    has facingMode ["user"] and no torch. (android-camera2.py checks the
+    controls in detail.)
 
 The control launch keeps Firefox's own shape: no InputDeviceInfo interface.
 

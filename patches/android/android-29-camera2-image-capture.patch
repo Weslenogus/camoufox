@@ -1,0 +1,3148 @@
+diff --git a/dom/media/AndroidCameraControls.h b/dom/media/AndroidCameraControls.h
+new file mode 100644
+index 0000000000..e6c8a6dc1e
+--- /dev/null
++++ b/dom/media/AndroidCameraControls.h
+@@ -0,0 +1,142 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++/* Camoufox: the Image Capture controls of an Android phone's camera, as
++ * Chrome on Android reports and sets them.
++ *
++ * Chrome exposes a Camera2 device's controls -- white balance, exposure and
++ * focus modes, exposure compensation and time, colour temperature, ISO,
++ * focus distance, zoom and torch -- through a camera track's
++ * getCapabilities(), getSettings() and applyConstraints(), and its photo
++ * settings through ImageCapture. One AndroidCameraControls holds those
++ * controls' current values for one capture device; clones of a track copy
++ * them, as Chrome's track clones copy their ImageCapture state.
++ *
++ * The capabilities are the profile's ("mediaDevices:cameras" in
++ * DeviceProfiles.cpp). The values a control takes once set follow Chrome's
++ * VideoCaptureCamera2: zoom snaps to a whole-pixel crop of the sensor,
++ * exposure compensation to the sensor's step, and so on. Constraints are
++ * checked and applied as Blink's ImageCapture does (image_capture.cc).
++ *
++ * Main thread only. */
++
++#ifndef DOM_MEDIA_ANDROIDCAMERACONTROLS_H_
++#define DOM_MEDIA_ANDROIDCAMERACONTROLS_H_
++
++#include "mozilla/Maybe.h"
++#include "mozilla/gfx/Point.h"
++#include "nsISupportsImpl.h"
++#include "nsString.h"
++
++namespace mozilla {
++
++namespace dom {
++struct MediaTrackCapabilities;
++struct MediaTrackConstraints;
++struct MediaTrackConstraintSet;
++struct MediaTrackSettings;
++struct PhotoCapabilities;
++struct PhotoSettings;
++}  // namespace dom
++
++// One configured camera; defined in AndroidMediaDevices.cpp.
++struct AndroidCamera;
++
++class AndroidCameraControls final {
++ public:
++  NS_INLINE_DECL_REFCOUNTING(AndroidCameraControls)
++
++  // The controls of the camera named aRawName (a configured camera's label;
++  // any other device is the first camera, as in AndroidMediaDevices), or
++  // null when no Android device set is active.
++  static already_AddRefed<AndroidCameraControls> Create(
++      const nsAString& aRawName);
++
++  already_AddRefed<AndroidCameraControls> Clone() const;
++
++  // The Image Capture members of a running track's capabilities and
++  // settings.
++  void AddCapabilities(dom::MediaTrackCapabilities& aOut) const;
++  void AddSettings(dom::MediaTrackSettings& aOut) const;
++
++  // An applyConstraints() rejection: an OverconstrainedError naming
++  // mConstraint, or, with mSecurity, a SecurityError.
++  struct Rejection {
++    nsCString mConstraint;
++    nsCString mMessage;
++    bool mSecurity = false;
++  };
++
++  // Applies the Image Capture members of aConstraints, as Blink's
++  // ImageCapture::SetMediaTrackConstraints. aPageVisible: whether the
++  // document is visible (pan, tilt and zoom need it).
++  Maybe<Rejection> ApplyConstraints(
++      const dom::MediaTrackConstraints& aConstraints, bool aPageVisible);
++
++  // The Image Capture values getUserMedia() asked for, applied the way
++  // Chrome's ImageCapture applies the track's initial device settings:
++  // values in range are taken, nothing is rejected.
++  void ApplyInitialConstraints(const dom::MediaTrackConstraints& aConstraints);
++
++  // ImageCapture.
++  void GetPhotoCapabilities(dom::PhotoCapabilities& aOut) const;
++  // aTrackSize: the track's current capture size, which Chrome reports until
++  // a photo size has been set.
++  void GetPhotoSettings(const gfx::IntSize& aTrackSize,
++                        dom::PhotoSettings& aOut) const;
++  // takePhoto()'s checks, made against the photo capabilities once a page
++  // has seen them (Blink skips them before). Returns the NotSupportedError
++  // message on failure.
++  Maybe<nsCString> CheckPhotoSettings(const dom::PhotoSettings& aSettings,
++                                      bool aKnowsCapabilities) const;
++  void SetPhotoOptions(const dom::PhotoSettings& aSettings);
++  // The JPEG size takePhoto() produces: the camera's JPEG output size
++  // closest to the photo size set, or its first (largest) one.
++  gfx::IntSize PhotoSize(const gfx::IntSize& aTrackSize) const;
++
++  // Which constrainable properties a constraint set names: Image Capture
++  // ones, and the others (Blink's ConstraintSetHas[Non]ImageCapture).
++  static bool HasImageCapture(const dom::MediaTrackConstraintSet& aSet);
++  static bool HasNonImageCapture(const dom::MediaTrackConstraintSet& aSet);
++  // Whether the basic set or any advanced set satisfies the predicate.
++  static bool AnySet(const dom::MediaTrackConstraints& aConstraints,
++                     bool (*aPredicate)(const dom::MediaTrackConstraintSet&));
++  // Removes the Image Capture members, where no Android device is emulated
++  // and Firefox's getConstraints() never reports them.
++  static void StripImageCapture(dom::MediaTrackConstraints& aConstraints);
++
++ private:
++  explicit AndroidCameraControls(const AndroidCamera& aCamera);
++  ~AndroidCameraControls() = default;
++
++  // Chrome's reading of a value it was given, as the camera reports it back.
++  double ReportedZoom(double aZoom) const;
++  double ReportedExposureCompensation(double aValue) const;
++  double ReportedColorTemperature() const;
++  double ReportedFocusDistance() const;
++
++  const AndroidCamera& mCamera;
++
++  // Current settings, as the web sees them.
++  nsString mWhiteBalanceMode;
++  nsString mExposureMode;
++  nsString mFocusMode;
++  double mExposureCompensation = 0;
++  double mExposureTime = 0;
++  double mColorTemperature = 0;  // As set; reported via the AWB presets.
++  double mIso = 0;
++  double mFocusDistance = 0;  // As set, in meters; 0 when never set.
++  double mZoom = 1;
++  bool mTorch = false;
++
++  // Photo settings.
++  int32_t mPhotoWidth = 0;
++  int32_t mPhotoHeight = 0;
++  nsString mFillLightMode;
++  bool mRedEyeReduction = false;
++};
++
++}  // namespace mozilla
++
++#endif  // DOM_MEDIA_ANDROIDCAMERACONTROLS_H_
+diff --git a/dom/media/AndroidMediaDevices.cpp b/dom/media/AndroidMediaDevices.cpp
+index c79859b8de..a71c0debc0 100644
+--- a/dom/media/AndroidMediaDevices.cpp
++++ b/dom/media/AndroidMediaDevices.cpp
+@@ -4,12 +4,17 @@
+ 
+ #include "AndroidMediaDevices.h"
+ 
++#include <algorithm>
++#include <cmath>
+ #include <string>
+ #include <vector>
+ 
++#include "AndroidCameraControls.h"
+ #include "AudioDeviceInfo.h"
+ #include "MaskConfig.hpp"
+ #include "mozilla/Base64.h"
++#include "mozilla/dom/ImageCaptureBinding.h"
++#include "mozilla/dom/MediaStreamTrackBinding.h"
+ #include "mozilla/dom/MediaTrackCapabilitiesBinding.h"
+ #include "mozilla/dom/MediaTrackSettingsBinding.h"
+ 
+@@ -17,25 +22,46 @@ namespace mozilla {
+ 
+ using dom::MediaDeviceKind;
+ using dom::MediaTrackCapabilities;
++using dom::MediaTrackConstraints;
++using dom::MediaTrackConstraintSet;
+ using dom::MediaTrackSettings;
+ 
+-namespace {
+-
+ // One entry of "mediaDevices:cameras".
+-struct Camera {
++struct AndroidCamera {
++  struct Range {
++    double mMin = 0;
++    double mMax = 0;
++    double mStep = 0;
++  };
++
+   nsString mLabel;
+   nsString mFacingMode;
+   uint32_t mWidth = 1920;
+   uint32_t mHeight = 1080;
+   double mFrameRate = 30;
+   // Image Capture controls; absent when the camera has none.
+-  bool mHasZoom = false;
+-  double mZoomMin = 1, mZoomMax = 1, mZoomStep = 0.1;
++  Maybe<Range> mZoom;
+   bool mTorch = false;
+   std::vector<nsString> mFocusModes;
+   std::vector<nsString> mExposureModes;
++  std::vector<nsString> mWhiteBalanceModes;
++  Maybe<Range> mExposureCompensation;
++  Maybe<Range> mExposureTime;
++  Maybe<Range> mColorTemperature;
++  Maybe<Range> mIso;
++  Maybe<Range> mFocusDistance;
++  // The JPEG output sizes, in Camera2's order (largest first).
++  std::vector<gfx::IntSize> mPhotoSizes;
++  std::vector<nsString> mFillLightModes;
++  // SENSOR_INFO_ACTIVE_ARRAY_SIZE, which zoom crops.
++  gfx::IntSize mActiveArray;
++  // The values the controls report before any is set.
++  double mIsoValue = 0;
++  double mExposureTimeValue = 0;
+ };
+ 
++namespace {
++
+ // The raw id and group id of the default microphone and speaker. Both are
+ // the phone's built-in audio, so they share a group, as in Chrome.
+ constexpr auto kDefaultId = u"default"_ns;
+@@ -68,11 +94,32 @@ std::vector<nsString> ToStrings(const nlohmann::json& aObject,
+   return out;
+ }
+ 
++Maybe<AndroidCamera::Range> ToRange(const nlohmann::json& aObject,
++                                    const char* aKey) {
++  auto it = aObject.find(aKey);
++  if (it == aObject.end() || !it->is_object()) {
++    return Nothing();
++  }
++  AndroidCamera::Range range;
++  range.mMin = ToDouble(*it, "min", 0);
++  range.mMax = ToDouble(*it, "max", 0);
++  range.mStep = ToDouble(*it, "step", 0);
++  return Some(range);
++}
++
++gfx::IntSize ToSize(const nlohmann::json& aValue) {
++  if (!aValue.is_array() || aValue.size() != 2 || !aValue[0].is_number() ||
++      !aValue[1].is_number()) {
++    return gfx::IntSize();
++  }
++  return gfx::IntSize(aValue[0].get<int32_t>(), aValue[1].get<int32_t>());
++}
++
+ // Parsed once: CAMOU_CONFIG never changes after startup. Malformed entries
+ // are skipped rather than trusted.
+-const std::vector<Camera>& Cameras() {
+-  static const std::vector<Camera> cameras = [] {
+-    std::vector<Camera> out;
++const std::vector<AndroidCamera>& Cameras() {
++  static const std::vector<AndroidCamera> cameras = [] {
++    std::vector<AndroidCamera> out;
+     const nlohmann::json& config = MaskConfig::GetJson();
+     if (!config.is_object()) {
+       return out;
+@@ -85,7 +132,7 @@ const std::vector<Camera>& Cameras() {
+       if (!entry.is_object()) {
+         continue;
+       }
+-      Camera camera;
++      AndroidCamera camera;
+       auto label = entry.find("label");
+       if (label == entry.end() || !label->is_string()) {
+         continue;
+@@ -98,18 +145,52 @@ const std::vector<Camera>& Cameras() {
+       camera.mWidth = static_cast<uint32_t>(ToDouble(entry, "width", 1920));
+       camera.mHeight = static_cast<uint32_t>(ToDouble(entry, "height", 1080));
+       camera.mFrameRate = ToDouble(entry, "frameRate", 30);
+-      auto zoom = entry.find("zoom");
+-      if (zoom != entry.end() && zoom->is_object()) {
+-        camera.mHasZoom = true;
+-        camera.mZoomMin = ToDouble(*zoom, "min", 1);
+-        camera.mZoomMax = ToDouble(*zoom, "max", 1);
+-        camera.mZoomStep = ToDouble(*zoom, "step", 0.1);
++      camera.mZoom = ToRange(entry, "zoom");
++      if (camera.mZoom) {
++        if (!entry["zoom"].contains("min")) {
++          camera.mZoom->mMin = 1;
++        }
++        if (!entry["zoom"].contains("step")) {
++          camera.mZoom->mStep = 0.1;
++        }
+       }
+       auto torch = entry.find("torch");
+       camera.mTorch = torch != entry.end() && torch->is_boolean() &&
+                       torch->get<bool>();
+       camera.mFocusModes = ToStrings(entry, "focusMode");
+       camera.mExposureModes = ToStrings(entry, "exposureMode");
++      camera.mWhiteBalanceModes = ToStrings(entry, "whiteBalanceMode");
++      camera.mExposureCompensation = ToRange(entry, "exposureCompensation");
++      camera.mExposureTime = ToRange(entry, "exposureTime");
++      camera.mColorTemperature = ToRange(entry, "colorTemperature");
++      camera.mIso = ToRange(entry, "iso");
++      camera.mFocusDistance = ToRange(entry, "focusDistance");
++      auto sizes = entry.find("photoSizes");
++      if (sizes != entry.end() && sizes->is_array()) {
++        for (const auto& size : *sizes) {
++          gfx::IntSize parsed = ToSize(size);
++          if (parsed.width > 0 && parsed.height > 0) {
++            camera.mPhotoSizes.push_back(parsed);
++          }
++        }
++      }
++      if (camera.mPhotoSizes.empty()) {
++        camera.mPhotoSizes.emplace_back(int32_t(camera.mWidth),
++                                        int32_t(camera.mHeight));
++      }
++      camera.mFillLightModes = ToStrings(entry, "fillLightMode");
++      auto active = entry.find("activeArray");
++      camera.mActiveArray = active != entry.end() ? ToSize(*active)
++                                                  : gfx::IntSize();
++      if (camera.mActiveArray.width <= 0 || camera.mActiveArray.height <= 0) {
++        camera.mActiveArray =
++            gfx::IntSize(int32_t(camera.mWidth), int32_t(camera.mHeight));
++      }
++      auto values = entry.find("settings");
++      if (values != entry.end() && values->is_object()) {
++        camera.mIsoValue = ToDouble(*values, "iso", 0);
++        camera.mExposureTimeValue = ToDouble(*values, "exposureTime", 0);
++      }
+       out.push_back(std::move(camera));
+     }
+     return out;
+@@ -120,7 +201,7 @@ const std::vector<Camera>& Cameras() {
+ // The configured camera with this label, or the first one: a device that is
+ // not a configured camera is whatever getUserMedia opened by default, which
+ // in Chrome on Android is the first camera enumerated.
+-const Camera* FindCamera(const nsAString& aRawName) {
++const AndroidCamera* FindCamera(const nsAString& aRawName) {
+   const auto& cameras = Cameras();
+   for (const auto& camera : cameras) {
+     if (camera.mLabel.Equals(aRawName)) {
+@@ -166,6 +247,56 @@ void SetRange(dom::Optional<dom::DoubleRange>& aOut, double aMin,
+   range.mMax.Construct(aMax);
+ }
+ 
++void SetRange(dom::Optional<dom::MediaSettingsRange>& aOut,
++              const AndroidCamera::Range& aRange) {
++  auto& range = aOut.Construct();
++  range.mMax.Construct(aRange.mMax);
++  range.mMin.Construct(aRange.mMin);
++  range.mStep.Construct(aRange.mStep);
++}
++
++// Chrome reports a range only when it is not a single value.
++bool Reported(const Maybe<AndroidCamera::Range>& aRange) {
++  return aRange && aRange->mMax != aRange->mMin;
++}
++
++// What Blink's ImageCapture adds to a running camera track's capabilities.
++// Zoom needs the pan-tilt-zoom permission, which Chrome on Android grants
++// with the camera's.
++void AddImageCaptureCapabilities(const AndroidCamera& aCamera,
++                                 MediaTrackCapabilities& aOut) {
++  if (!aCamera.mWhiteBalanceModes.empty()) {
++    AppendStrings(aOut.mWhiteBalanceMode, aCamera.mWhiteBalanceModes);
++  }
++  if (!aCamera.mExposureModes.empty()) {
++    AppendStrings(aOut.mExposureMode, aCamera.mExposureModes);
++  }
++  if (!aCamera.mFocusModes.empty()) {
++    AppendStrings(aOut.mFocusMode, aCamera.mFocusModes);
++  }
++  if (Reported(aCamera.mExposureCompensation)) {
++    SetRange(aOut.mExposureCompensation, *aCamera.mExposureCompensation);
++  }
++  if (Reported(aCamera.mExposureTime)) {
++    SetRange(aOut.mExposureTime, *aCamera.mExposureTime);
++  }
++  if (Reported(aCamera.mColorTemperature)) {
++    SetRange(aOut.mColorTemperature, *aCamera.mColorTemperature);
++  }
++  if (Reported(aCamera.mIso)) {
++    SetRange(aOut.mIso, *aCamera.mIso);
++  }
++  if (Reported(aCamera.mFocusDistance)) {
++    SetRange(aOut.mFocusDistance, *aCamera.mFocusDistance);
++  }
++  if (Reported(aCamera.mZoom)) {
++    SetRange(aOut.mZoom, *aCamera.mZoom);
++  }
++  if (aCamera.mTorch) {
++    aOut.mTorch.Construct(true);
++  }
++}
++
+ }  // namespace
+ 
+ /* static */
+@@ -215,7 +346,7 @@ void AndroidMediaDevices::GetCapabilities(MediaDeviceKind aKind,
+   if (aKind != MediaDeviceKind::Videoinput) {
+     return;
+   }
+-  const Camera* camera = FindCamera(aRawName);
++  const AndroidCamera* camera = FindCamera(aRawName);
+   if (!camera) {
+     return;
+   }
+@@ -231,23 +362,8 @@ void AndroidMediaDevices::GetCapabilities(MediaDeviceKind aKind,
+   }
+   AppendLiterals(aOut.mResizeMode, {u"none"_ns, u"crop-and-scale"_ns});
+ 
+-  if (!aTrack) {
+-    return;
+-  }
+-  if (!camera->mExposureModes.empty()) {
+-    AppendStrings(aOut.mExposureMode, camera->mExposureModes);
+-  }
+-  if (!camera->mFocusModes.empty()) {
+-    AppendStrings(aOut.mFocusMode, camera->mFocusModes);
+-  }
+-  if (camera->mHasZoom) {
+-    auto& zoom = aOut.mZoom.Construct();
+-    zoom.mMin.Construct(camera->mZoomMin);
+-    zoom.mMax.Construct(camera->mZoomMax);
+-    zoom.mStep.Construct(camera->mZoomStep);
+-  }
+-  if (camera->mTorch) {
+-    aOut.mTorch.Construct(true);
++  if (aTrack) {
++    AddImageCaptureCapabilities(*camera, aOut);
+   }
+ }
+ 
+@@ -267,12 +383,17 @@ Maybe<nsString> AndroidMediaDevices::FacingModeOf(const nsAString& aRawName) {
+ /* static */
+ void AndroidMediaDevices::AddSettings(const nsAString& aRawName,
+                                       MediaTrackSettings& aOut) {
+-  const Camera* camera = FindCamera(aRawName);
++  const AndroidCamera* camera = FindCamera(aRawName);
+   if (camera && !camera->mFacingMode.IsEmpty()) {
+     // The source may already have reported one.
+     aOut.mFacingMode.Reset();
+     aOut.mFacingMode.Construct(camera->mFacingMode);
+   }
++  if (aOut.mWidth.WasPassed() && aOut.mHeight.WasPassed() &&
++      aOut.mHeight.Value() > 0 && !aOut.mAspectRatio.WasPassed()) {
++    aOut.mAspectRatio.Construct(double(aOut.mWidth.Value()) /
++                                aOut.mHeight.Value());
++  }
+ }
+ 
+ /* static */
+@@ -295,4 +416,1058 @@ void AndroidMediaDevices::ToChromeId(const nsAString& aRawId, nsAString& aId) {
+   aId.Assign(hex);
+ }
+ 
++
++// AndroidCameraControls
++
++namespace {
++
++using dom::ConstrainDoubleRange;
++using dom::OwningBooleanOrConstrainBooleanParameters;
++using dom::OwningBooleanOrDoubleOrConstrainDoubleRange;
++using dom::OwningDoubleOrConstrainDoubleRange;
++using dom::OwningPoint2DSequenceOrConstrainPoint2DParameters;
++using dom::OwningStringOrStringSequence;
++using dom::OwningStringOrStringSequenceOrConstrainDOMStringParameters;
++using Range = AndroidCamera::Range;
++using Strings = std::vector<nsString>;
++
++constexpr auto kContinuous = u"continuous"_ns;
++constexpr auto kManual = u"manual"_ns;
++
++// Blink's ImageCapture: how a constraint set is read, and the kinds of
++// constraint values (image_capture.cc).
++enum class SetType { Basic, FirstAdvanced, Advanced };
++
++enum class ConstraintType {
++  EmptySequence,
++  BooleanFalse,
++  BooleanTrue,
++  BareValue,
++  BareValueStringSequence,
++  EmptyDictionary,
++  EffectivelyEmptyDictionary,
++  IdealDictionary,
++  MandatoryDictionary,
++};
++
++bool IsEmptySequence(const OwningStringOrStringSequence& aValue) {
++  return aValue.IsStringSequence() && aValue.GetAsStringSequence().IsEmpty();
++}
++
++template <typename Params, typename IsEmpty>
++ConstraintType TypeOfParameters(const Params& aParams, IsEmpty aIsEmpty) {
++  if (!aParams.mExact.WasPassed() && !aParams.mIdeal.WasPassed()) {
++    return ConstraintType::EmptyDictionary;
++  }
++  if (aParams.mExact.WasPassed() && !aIsEmpty(aParams.mExact.Value())) {
++    return ConstraintType::MandatoryDictionary;
++  }
++  if (aParams.mIdeal.WasPassed() && !aIsEmpty(aParams.mIdeal.Value())) {
++    return ConstraintType::IdealDictionary;
++  }
++  return ConstraintType::EffectivelyEmptyDictionary;
++}
++
++ConstraintType TypeOf(
++    const OwningStringOrStringSequenceOrConstrainDOMStringParameters& aValue) {
++  if (aValue.IsConstrainDOMStringParameters()) {
++    return TypeOfParameters(
++        aValue.GetAsConstrainDOMStringParameters(),
++        [](const OwningStringOrStringSequence& v) {
++          return IsEmptySequence(v);
++        });
++  }
++  if (aValue.IsStringSequence()) {
++    return aValue.GetAsStringSequence().IsEmpty()
++               ? ConstraintType::EmptySequence
++               : ConstraintType::BareValueStringSequence;
++  }
++  return ConstraintType::BareValue;
++}
++
++ConstraintType TypeOf(const ConstrainDoubleRange& aRange) {
++  if (aRange.mExact.WasPassed() || aRange.mMax.WasPassed() ||
++      aRange.mMin.WasPassed()) {
++    return ConstraintType::MandatoryDictionary;
++  }
++  if (aRange.mIdeal.WasPassed()) {
++    return ConstraintType::IdealDictionary;
++  }
++  return ConstraintType::EmptyDictionary;
++}
++
++ConstraintType TypeOf(const OwningDoubleOrConstrainDoubleRange& aValue) {
++  return aValue.IsConstrainDoubleRange()
++             ? TypeOf(aValue.GetAsConstrainDoubleRange())
++             : ConstraintType::BareValue;
++}
++
++ConstraintType TypeOf(const OwningBooleanOrDoubleOrConstrainDoubleRange& aValue) {
++  if (aValue.IsBoolean()) {
++    return aValue.GetAsBoolean() ? ConstraintType::BooleanTrue
++                                 : ConstraintType::BooleanFalse;
++  }
++  return aValue.IsConstrainDoubleRange()
++             ? TypeOf(aValue.GetAsConstrainDoubleRange())
++             : ConstraintType::BareValue;
++}
++
++ConstraintType TypeOf(const OwningBooleanOrConstrainBooleanParameters& aValue) {
++  if (aValue.IsConstrainBooleanParameters()) {
++    return TypeOfParameters(aValue.GetAsConstrainBooleanParameters(),
++                            [](bool) { return false; });
++  }
++  return ConstraintType::BareValue;
++}
++
++ConstraintType TypeOf(
++    const OwningPoint2DSequenceOrConstrainPoint2DParameters& aValue) {
++  if (aValue.IsConstrainPoint2DParameters()) {
++    return TypeOfParameters(
++        aValue.GetAsConstrainPoint2DParameters(),
++        [](const dom::Sequence<dom::Point2D>& v) { return v.IsEmpty(); });
++  }
++  return aValue.GetAsPoint2DSequence().IsEmpty()
++             ? ConstraintType::EmptySequence
++             : ConstraintType::BareValue;
++}
++
++bool BareIsExact(SetType aSetType) { return aSetType != SetType::Basic; }
++
++bool IsValueConstraintType(ConstraintType aType, SetType aSetType) {
++  if (aSetType == SetType::FirstAdvanced &&
++      aType != ConstraintType::BareValue) {
++    return false;
++  }
++  switch (aType) {
++    case ConstraintType::BareValue:
++    case ConstraintType::BareValueStringSequence:
++    case ConstraintType::MandatoryDictionary:
++      return true;
++    case ConstraintType::IdealDictionary:
++      return aSetType == SetType::Basic;
++    default:
++      return false;
++  }
++}
++
++template <typename T>
++bool IsValueConstraint(const T& aValue, SetType aSetType) {
++  return IsValueConstraintType(TypeOf(aValue), aSetType);
++}
++
++bool CapabilityExistenceSatisfies(ConstraintType aType, bool aExists,
++                                  SetType aSetType) {
++  switch (aType) {
++    case ConstraintType::BooleanFalse:
++      return BareIsExact(aSetType) ? !aExists : true;
++    case ConstraintType::BooleanTrue:
++    case ConstraintType::BareValue:
++    case ConstraintType::BareValueStringSequence:
++      return BareIsExact(aSetType) ? aExists : true;
++    case ConstraintType::MandatoryDictionary:
++      return aExists;
++    default:
++      return true;
++  }
++}
++
++bool Contains(const Strings& aValues, const nsAString& aValue) {
++  return std::find_if(aValues.begin(), aValues.end(), [&](const nsString& v) {
++           return v.Equals(aValue);
++         }) != aValues.end();
++}
++
++template <typename Seq>
++bool ContainsAny(const Strings& aValues, const Seq& aCandidates) {
++  for (const auto& candidate : aCandidates) {
++    if (Contains(aValues, candidate)) {
++      return true;
++    }
++  }
++  return false;
++}
++
++bool InRange(const Range& aRange, double aValue) {
++  return aValue <= aRange.mMax && aValue >= aRange.mMin;
++}
++
++// CheckValueConstraint, per constraint kind.
++bool CheckValue(
++    const Strings& aCapability,
++    const OwningStringOrStringSequenceOrConstrainDOMStringParameters& aValue,
++    SetType aSetType) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return true;
++  }
++  if (aValue.IsString()) {
++    return !BareIsExact(aSetType) || Contains(aCapability, aValue.GetAsString());
++  }
++  if (aValue.IsStringSequence()) {
++    return !BareIsExact(aSetType) ||
++           ContainsAny(aCapability, aValue.GetAsStringSequence());
++  }
++  const auto& params = aValue.GetAsConstrainDOMStringParameters();
++  if (params.mExact.WasPassed()) {
++    const auto& exact = params.mExact.Value();
++    return exact.IsString() ? Contains(aCapability, exact.GetAsString())
++                            : ContainsAny(aCapability,
++                                          exact.GetAsStringSequence());
++  }
++  return true;
++}
++
++// Double constraints, and zoom's (boolean or ConstrainDouble): a boolean is
++// never a value constraint, so both read as ConstrainDouble here.
++template <typename U>
++bool CheckRangeValue(const Range& aCapability, const U& aValue,
++                     SetType aSetType) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return true;
++  }
++  if (aValue.IsDouble()) {
++    return !BareIsExact(aSetType) || InRange(aCapability, aValue.GetAsDouble());
++  }
++  const auto& range = aValue.GetAsConstrainDoubleRange();
++  if (range.mExact.WasPassed()) {
++    const double exact = range.mExact.Value();
++    if ((range.mMax.WasPassed() && exact > range.mMax.Value()) ||
++        (range.mMin.WasPassed() && exact < range.mMin.Value()) ||
++        !InRange(aCapability, exact)) {
++      return false;
++    }
++  }
++  if (range.mMax.WasPassed()) {
++    const double max = range.mMax.Value();
++    if ((range.mMin.WasPassed() && max < range.mMin.Value()) ||
++        max < aCapability.mMin) {
++      return false;
++    }
++  }
++  if (range.mMin.WasPassed() && range.mMin.Value() > aCapability.mMax) {
++    return false;
++  }
++  return true;
++}
++
++bool CheckValue(const std::vector<bool>& aCapability,
++                const OwningBooleanOrConstrainBooleanParameters& aValue,
++                SetType aSetType) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return true;
++  }
++  auto contains = [&](bool v) {
++    return std::find(aCapability.begin(), aCapability.end(), v) !=
++           aCapability.end();
++  };
++  if (aValue.IsBoolean()) {
++    return !BareIsExact(aSetType) || contains(aValue.GetAsBoolean());
++  }
++  const auto& params = aValue.GetAsConstrainBooleanParameters();
++  return !params.mExact.WasPassed() || contains(params.mExact.Value());
++}
++
++// The settings a constraint set selects (Blink's mojom PhotoSettings).
++struct Selected {
++  Maybe<nsString> mWhiteBalanceMode;
++  Maybe<nsString> mExposureMode;
++  Maybe<nsString> mFocusMode;
++  Maybe<double> mExposureCompensation;
++  Maybe<double> mExposureTime;
++  Maybe<double> mColorTemperature;
++  Maybe<double> mIso;
++  Maybe<double> mFocusDistance;
++  Maybe<double> mZoom;
++  Maybe<bool> mTorch;
++};
++
++// ApplyValueConstraint, per constraint kind: selects a setting and returns
++// the capability left for the following constraint sets.
++Strings ApplyValue(
++    Maybe<nsString>& aSetting, const Strings& aCapability,
++    const OwningStringOrStringSequenceOrConstrainDOMStringParameters& aValue,
++    SetType aSetType, const nsString& aCurrent) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return aCapability;
++  }
++  auto exactOne = [&](const nsString& aExact) {
++    aSetting = Some(aExact);
++    return Strings{aExact};
++  };
++  auto exactMany = [&](const dom::Sequence<nsString>& aExacts) {
++    Strings left;
++    for (const auto& exact : aExacts) {
++      if (Contains(aCapability, exact)) {
++        left.push_back(exact);
++      }
++    }
++    if (!aSetting || !Contains(Strings(aExacts.begin(), aExacts.end()),
++                               *aSetting)) {
++      aSetting = Some(left.empty() ? aCurrent : left.front());
++    }
++    return left;
++  };
++  auto idealOne = [&](const nsString& aIdeal) {
++    aSetting = Some(Contains(aCapability, aIdeal) ? aIdeal : aCurrent);
++    return aCapability;
++  };
++  auto idealMany = [&](const dom::Sequence<nsString>& aIdeals) {
++    if (!aSetting ||
++        !Contains(Strings(aIdeals.begin(), aIdeals.end()), *aSetting)) {
++      nsString name = aCurrent;
++      for (const auto& ideal : aIdeals) {
++        if (Contains(aCapability, ideal)) {
++          name = ideal;
++          break;
++        }
++      }
++      aSetting = Some(name);
++    }
++    return aCapability;
++  };
++  if (aValue.IsString()) {
++    return BareIsExact(aSetType) ? exactOne(aValue.GetAsString())
++                                 : idealOne(aValue.GetAsString());
++  }
++  if (aValue.IsStringSequence()) {
++    return BareIsExact(aSetType) ? exactMany(aValue.GetAsStringSequence())
++                                 : idealMany(aValue.GetAsStringSequence());
++  }
++  const auto& params = aValue.GetAsConstrainDOMStringParameters();
++  if (params.mExact.WasPassed()) {
++    const auto& exact = params.mExact.Value();
++    return exact.IsString() ? exactOne(exact.GetAsString())
++                            : exactMany(exact.GetAsStringSequence());
++  }
++  const auto& ideal = params.mIdeal.Value();
++  return ideal.IsString() ? idealOne(ideal.GetAsString())
++                          : idealMany(ideal.GetAsStringSequence());
++}
++
++template <typename U>
++Range ApplyRangeValue(Maybe<double>& aSetting, const Range& aCapability,
++                      const U& aValue, SetType aSetType, double aCurrent) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return aCapability;
++  }
++  auto exact = [&](double aExact) {
++    aSetting = Some(aExact);
++    Range left = aCapability;
++    left.mMin = left.mMax = aExact;
++    return left;
++  };
++  auto ideal = [&](const Range& aLeft, Maybe<double> aIdeal) {
++    aSetting = Some(std::clamp(aIdeal.valueOr(aCurrent), aLeft.mMin,
++                               aLeft.mMax));
++    return aLeft;
++  };
++  if (aValue.IsDouble()) {
++    return BareIsExact(aSetType)
++               ? exact(aValue.GetAsDouble())
++               : ideal(aCapability, Some(aValue.GetAsDouble()));
++  }
++  const auto& range = aValue.GetAsConstrainDoubleRange();
++  if (range.mExact.WasPassed()) {
++    return exact(range.mExact.Value());
++  }
++  Range left = aCapability;
++  if (range.mMax.WasPassed()) {
++    left.mMax = std::min(range.mMax.Value(), aCapability.mMax);
++  }
++  if (range.mMin.WasPassed()) {
++    left.mMin = std::max(range.mMin.Value(), aCapability.mMin);
++  }
++  return ideal(left, range.mIdeal.WasPassed() && aSetType == SetType::Basic
++                         ? Some(range.mIdeal.Value())
++                         : Nothing());
++}
++
++std::vector<bool> ApplyValue(
++    Maybe<bool>& aSetting, const std::vector<bool>& aCapability,
++    const OwningBooleanOrConstrainBooleanParameters& aValue,
++    SetType aSetType) {
++  if (!IsValueConstraint(aValue, aSetType)) {
++    return aCapability;
++  }
++  auto exact = [&](bool aExact) {
++    aSetting = Some(aExact);
++    return std::vector<bool>{aExact};
++  };
++  auto ideal = [&](bool aIdeal) {
++    const bool supported = std::find(aCapability.begin(), aCapability.end(),
++                                     aIdeal) != aCapability.end();
++    aSetting = Some(supported ? aIdeal : aCapability.front());
++    return aCapability;
++  };
++  if (aValue.IsBoolean()) {
++    return BareIsExact(aSetType) ? exact(aValue.GetAsBoolean())
++                                 : ideal(aValue.GetAsBoolean());
++  }
++  const auto& params = aValue.GetAsConstrainBooleanParameters();
++  return params.mExact.WasPassed() ? exact(params.mExact.Value())
++                                   : ideal(params.mIdeal.Value());
++}
++
++// The camera's capabilities, as constraint sets narrow them down.
++struct Effective {
++  Strings mWhiteBalanceMode;
++  Strings mExposureMode;
++  Strings mFocusMode;
++  Maybe<Range> mExposureCompensation;
++  Maybe<Range> mExposureTime;
++  Maybe<Range> mColorTemperature;
++  Maybe<Range> mIso;
++  Maybe<Range> mFocusDistance;
++  Maybe<Range> mZoom;
++  bool mTorch = false;
++  // Blink keeps an exact torch constraint's value as an effective setting.
++  Maybe<bool> mTorchSetting;
++
++  std::vector<bool> TorchValues() const {
++    return mTorchSetting ? std::vector<bool>{*mTorchSetting}
++                         : std::vector<bool>{false, true};
++  }
++};
++
++Maybe<Range> ReportedRange(const Maybe<Range>& aRange) {
++  return Reported(aRange) ? aRange : Nothing();
++}
++
++Effective EffectiveOf(const AndroidCamera& aCamera) {
++  Effective out;
++  out.mWhiteBalanceMode = aCamera.mWhiteBalanceModes;
++  out.mExposureMode = aCamera.mExposureModes;
++  out.mFocusMode = aCamera.mFocusModes;
++  out.mExposureCompensation = ReportedRange(aCamera.mExposureCompensation);
++  out.mExposureTime = ReportedRange(aCamera.mExposureTime);
++  out.mColorTemperature = ReportedRange(aCamera.mColorTemperature);
++  out.mIso = ReportedRange(aCamera.mIso);
++  out.mFocusDistance = ReportedRange(aCamera.mFocusDistance);
++  out.mZoom = ReportedRange(aCamera.mZoom);
++  out.mTorch = aCamera.mTorch;
++  return out;
++}
++
++// GetConstraintWithCapabilityExistenceMismatch: the first constraint naming
++// a control the camera lacks, when the set requires it.
++const char* ExistenceMismatch(const MediaTrackConstraintSet& aSet,
++                              const Effective& aCaps, SetType aSetType) {
++  auto check = [&](const auto& aMember, bool aExists) {
++    return !aMember.WasPassed() ||
++           CapabilityExistenceSatisfies(TypeOf(aMember.Value()), aExists,
++                                        aSetType);
++  };
++  if (!check(aSet.mWhiteBalanceMode, !aCaps.mWhiteBalanceMode.empty())) {
++    return "whiteBalanceMode";
++  }
++  if (!check(aSet.mExposureMode, !aCaps.mExposureMode.empty())) {
++    return "exposureMode";
++  }
++  if (!check(aSet.mFocusMode, !aCaps.mFocusMode.empty())) {
++    return "focusMode";
++  }
++  if (!check(aSet.mExposureCompensation,
++             aCaps.mExposureCompensation.isSome())) {
++    return "exposureCompensation";
++  }
++  if (!check(aSet.mExposureTime, aCaps.mExposureTime.isSome())) {
++    return "exposureTime";
++  }
++  if (!check(aSet.mColorTemperature, aCaps.mColorTemperature.isSome())) {
++    return "colorTemperature";
++  }
++  if (!check(aSet.mIso, aCaps.mIso.isSome())) {
++    return "iso";
++  }
++  if (!check(aSet.mBrightness, false)) {
++    return "brightness";
++  }
++  if (!check(aSet.mContrast, false)) {
++    return "contrast";
++  }
++  if (!check(aSet.mSaturation, false)) {
++    return "saturation";
++  }
++  if (!check(aSet.mSharpness, false)) {
++    return "sharpness";
++  }
++  if (!check(aSet.mFocusDistance, aCaps.mFocusDistance.isSome())) {
++    return "focusDistance";
++  }
++  if (!check(aSet.mPan, false)) {
++    return "pan";
++  }
++  if (!check(aSet.mTilt, false)) {
++    return "tilt";
++  }
++  if (!check(aSet.mZoom, aCaps.mZoom.isSome())) {
++    return "zoom";
++  }
++  if (!check(aSet.mTorch, aCaps.mTorch)) {
++    return "torch";
++  }
++  return nullptr;
++}
++
++// CheckMediaTrackConstraintSet. Returns the rejection, if any.
++Maybe<AndroidCameraControls::Rejection> CheckSet(
++    const MediaTrackConstraintSet& aSet, const Effective& aCaps,
++    SetType aSetType) {
++  auto reject = [](const char* aName, const char* aMessage) {
++    return Some(AndroidCameraControls::Rejection{nsCString(aName),
++                                                 nsCString(aMessage)});
++  };
++  if (const char* name = ExistenceMismatch(aSet, aCaps, aSetType)) {
++    return reject(name, "Unsupported constraint");
++  }
++  if (aSet.mWhiteBalanceMode.WasPassed() && !aCaps.mWhiteBalanceMode.empty() &&
++      !CheckValue(aCaps.mWhiteBalanceMode, aSet.mWhiteBalanceMode.Value(),
++                  aSetType)) {
++    return reject("whiteBalanceMode", "Unsupported whiteBalanceMode.");
++  }
++  if (aSet.mExposureMode.WasPassed() && !aCaps.mExposureMode.empty() &&
++      !CheckValue(aCaps.mExposureMode, aSet.mExposureMode.Value(),
++                  aSetType)) {
++    return reject("exposureMode", "Unsupported exposureMode.");
++  }
++  if (aSet.mFocusMode.WasPassed() && !aCaps.mFocusMode.empty() &&
++      !CheckValue(aCaps.mFocusMode, aSet.mFocusMode.Value(), aSetType)) {
++    return reject("focusMode", "Unsupported focusMode.");
++  }
++  auto checkRange = [&](const auto& aMember, const Maybe<Range>& aCap) {
++    return !aMember.WasPassed() || !aCap ||
++           CheckRangeValue(*aCap, aMember.Value(), aSetType);
++  };
++  if (!checkRange(aSet.mExposureCompensation, aCaps.mExposureCompensation)) {
++    return reject("exposureCompensation",
++                  "exposureCompensation setting out of range");
++  }
++  if (!checkRange(aSet.mExposureTime, aCaps.mExposureTime)) {
++    return reject("exposureTime", "exposureTime setting out of range");
++  }
++  if (!checkRange(aSet.mColorTemperature, aCaps.mColorTemperature)) {
++    return reject("colorTemperature", "colorTemperature setting out of range");
++  }
++  if (!checkRange(aSet.mIso, aCaps.mIso)) {
++    return reject("iso", "iso setting out of range");
++  }
++  if (!checkRange(aSet.mFocusDistance, aCaps.mFocusDistance)) {
++    return reject("focusDistance", "focusDistance setting out of range");
++  }
++  if (!checkRange(aSet.mZoom, aCaps.mZoom)) {
++    return reject("zoom", "zoom setting out of range");
++  }
++  if (aSet.mTorch.WasPassed() && aCaps.mTorch &&
++      !CheckValue(aCaps.TorchValues(), aSet.mTorch.Value(), aSetType)) {
++    return reject("torch", "torch not supported");
++  }
++  return Nothing();
++}
++
++// ApplyMediaTrackConstraintSetToSettings.
++void ApplySet(const MediaTrackConstraintSet& aSet, Effective& aCaps,
++              SetType aSetType, Selected& aOut, const nsString& aWhiteBalanceMode,
++              const nsString& aExposureMode, const nsString& aFocusMode,
++              const double (&aCurrent)[6]) {
++  if (aSet.mWhiteBalanceMode.WasPassed() && !aCaps.mWhiteBalanceMode.empty()) {
++    aCaps.mWhiteBalanceMode =
++        ApplyValue(aOut.mWhiteBalanceMode, aCaps.mWhiteBalanceMode,
++                   aSet.mWhiteBalanceMode.Value(), aSetType, aWhiteBalanceMode);
++  }
++  if (aSet.mExposureMode.WasPassed() && !aCaps.mExposureMode.empty()) {
++    aCaps.mExposureMode =
++        ApplyValue(aOut.mExposureMode, aCaps.mExposureMode,
++                   aSet.mExposureMode.Value(), aSetType, aExposureMode);
++  }
++  if (aSet.mFocusMode.WasPassed() && !aCaps.mFocusMode.empty()) {
++    aCaps.mFocusMode = ApplyValue(aOut.mFocusMode, aCaps.mFocusMode,
++                                  aSet.mFocusMode.Value(), aSetType,
++                                  aFocusMode);
++  }
++  auto range = [&](const auto& aMember, Maybe<Range>& aCap,
++                   Maybe<double>& aSetting, double aCurrentValue) {
++    if (aMember.WasPassed() && aCap) {
++      aCap = Some(ApplyRangeValue(aSetting, *aCap, aMember.Value(), aSetType,
++                                  aCurrentValue));
++    }
++  };
++  range(aSet.mExposureCompensation, aCaps.mExposureCompensation,
++        aOut.mExposureCompensation, aCurrent[0]);
++  range(aSet.mExposureTime, aCaps.mExposureTime, aOut.mExposureTime,
++        aCurrent[1]);
++  range(aSet.mColorTemperature, aCaps.mColorTemperature,
++        aOut.mColorTemperature, aCurrent[2]);
++  range(aSet.mIso, aCaps.mIso, aOut.mIso, aCurrent[3]);
++  range(aSet.mFocusDistance, aCaps.mFocusDistance, aOut.mFocusDistance,
++        aCurrent[4]);
++  range(aSet.mZoom, aCaps.mZoom, aOut.mZoom, aCurrent[5]);
++  if (aSet.mTorch.WasPassed() && aCaps.mTorch) {
++    auto left = ApplyValue(aOut.mTorch, aCaps.TorchValues(),
++                           aSet.mTorch.Value(), aSetType);
++    if (left.size() == 1) {
++      aCaps.mTorchSetting = Some(left.front());
++    }
++  }
++}
++
++// Java's Math.round(float).
++int32_t JavaRound(float aValue) {
++  return static_cast<int32_t>(std::floor(aValue + 0.5f));
++}
++
++// VideoCaptureCamera2's COLOR_TEMPERATURES_MAP keys: the colour temperature
++// of each white balance preset.
++constexpr int32_t kWhiteBalancePresets[] = {2850, 2950, 4250, 4600,
++                                            5000, 6000, 7000};
++
++}  // namespace
++
++AndroidCameraControls::AndroidCameraControls(const AndroidCamera& aCamera)
++    : mCamera(aCamera),
++      mWhiteBalanceMode(kContinuous),
++      mExposureMode(kContinuous),
++      mFocusMode(kContinuous),
++      mExposureTime(aCamera.mExposureTimeValue),
++      mIso(aCamera.mIsoValue),
++      mFillLightMode(u"off"_ns) {}
++
++/* static */
++already_AddRefed<AndroidCameraControls> AndroidCameraControls::Create(
++    const nsAString& aRawName) {
++  if (!AndroidMediaDevices::IsActive()) {
++    return nullptr;
++  }
++  const AndroidCamera* camera = FindCamera(aRawName);
++  if (!camera) {
++    return nullptr;
++  }
++  return do_AddRef(new AndroidCameraControls(*camera));
++}
++
++already_AddRefed<AndroidCameraControls> AndroidCameraControls::Clone() const {
++  RefPtr clone = new AndroidCameraControls(mCamera);
++  clone->mWhiteBalanceMode = mWhiteBalanceMode;
++  clone->mExposureMode = mExposureMode;
++  clone->mFocusMode = mFocusMode;
++  clone->mExposureCompensation = mExposureCompensation;
++  clone->mExposureTime = mExposureTime;
++  clone->mColorTemperature = mColorTemperature;
++  clone->mIso = mIso;
++  clone->mFocusDistance = mFocusDistance;
++  clone->mZoom = mZoom;
++  clone->mTorch = mTorch;
++  clone->mPhotoWidth = mPhotoWidth;
++  clone->mPhotoHeight = mPhotoHeight;
++  clone->mFillLightMode = mFillLightMode;
++  clone->mRedEyeReduction = mRedEyeReduction;
++  return clone.forget();
++}
++
++void AndroidCameraControls::AddCapabilities(
++    MediaTrackCapabilities& aOut) const {
++  AddImageCaptureCapabilities(mCamera, aOut);
++}
++
++void AndroidCameraControls::AddSettings(MediaTrackSettings& aOut) const {
++  if (!mCamera.mWhiteBalanceModes.empty()) {
++    aOut.mWhiteBalanceMode.Construct(mWhiteBalanceMode);
++  }
++  if (!mCamera.mExposureModes.empty()) {
++    aOut.mExposureMode.Construct(mExposureMode);
++  }
++  if (!mCamera.mFocusModes.empty()) {
++    aOut.mFocusMode.Construct(mFocusMode);
++  }
++  if (Reported(mCamera.mExposureCompensation)) {
++    aOut.mExposureCompensation.Construct(
++        ReportedExposureCompensation(mExposureCompensation));
++  }
++  if (Reported(mCamera.mExposureTime)) {
++    aOut.mExposureTime.Construct(mExposureTime);
++  }
++  if (Reported(mCamera.mColorTemperature)) {
++    aOut.mColorTemperature.Construct(ReportedColorTemperature());
++  }
++  if (Reported(mCamera.mIso)) {
++    aOut.mIso.Construct(mIso);
++  }
++  if (Reported(mCamera.mFocusDistance)) {
++    aOut.mFocusDistance.Construct(ReportedFocusDistance());
++  }
++  if (Reported(mCamera.mZoom)) {
++    aOut.mZoom.Construct(mZoom);
++  }
++  if (mCamera.mTorch) {
++    aOut.mTorch.Construct(mTorch);
++  }
++}
++
++double AndroidCameraControls::ReportedZoom(double aZoom) const {
++  // VideoCaptureCamera2 crops the active array to whole pixels and reports
++  // the ratio back, in float.
++  const float maxZoom = static_cast<float>(mCamera.mZoom->mMax);
++  const float zoom = std::max(1.0f, std::min(float(aZoom), maxZoom));
++  const float cropFactor = (zoom - 1) / (2 * zoom);
++  const int32_t width = mCamera.mActiveArray.width;
++  const int32_t left = JavaRound(float(width) * cropFactor);
++  const int32_t right = JavaRound(float(width) * (1 - cropFactor));
++  if (right <= left) {
++    return 1;
++  }
++  return static_cast<double>(float(width) / float(right - left));
++}
++
++double AndroidCameraControls::ReportedExposureCompensation(
++    double aValue) const {
++  // A whole number of compensation steps, scaled back in float.
++  const float step = static_cast<float>(mCamera.mExposureCompensation->mStep);
++  if (step <= 0) {
++    return aValue;
++  }
++  const int32_t steps = static_cast<int32_t>(std::llround(aValue / step));
++  return static_cast<double>(float(steps) * step);
++}
++
++double AndroidCameraControls::ReportedColorTemperature() const {
++  // Only a locked white balance takes a preset, the one closest to the
++  // temperature asked for; under auto white balance none is reported.
++  if (!mWhiteBalanceMode.Equals(kManual) || mColorTemperature <= 0) {
++    return 0;
++  }
++  const int32_t asked = static_cast<int32_t>(std::lround(mColorTemperature));
++  int32_t best = kWhiteBalancePresets[0];
++  for (int32_t preset : kWhiteBalancePresets) {
++    if (std::abs(asked - preset) < std::abs(asked - best)) {
++      best = preset;
++    }
++  }
++  return best;
++}
++
++double AndroidCameraControls::ReportedFocusDistance() const {
++  // Set in meters, held in diopters as a float, reported in meters.
++  if (!mFocusMode.Equals(kManual) || mFocusDistance <= 0) {
++    return 0;
++  }
++  const float diopters = 1.0f / static_cast<float>(mFocusDistance);
++  return static_cast<double>(1.0f / diopters);
++}
++
++Maybe<AndroidCameraControls::Rejection> AndroidCameraControls::ApplyConstraints(
++    const MediaTrackConstraints& aConstraints, bool aPageVisible) {
++  nsTArray<const MediaTrackConstraintSet*> sets;
++  sets.AppendElement(&aConstraints);
++  if (aConstraints.mAdvanced.WasPassed()) {
++    for (const auto& set : aConstraints.mAdvanced.Value()) {
++      sets.AppendElement(&set);
++    }
++  }
++
++  if (!aPageVisible) {
++    for (const auto* set : sets) {
++      for (const auto* member : {&set->mPan, &set->mTilt, &set->mZoom}) {
++        if (member->WasPassed() &&
++            !(member->Value().IsBoolean() && !member->Value().GetAsBoolean())) {
++          return Some(Rejection{""_ns, "the page is not visible"_ns, true});
++        }
++      }
++    }
++  }
++
++  Effective caps = EffectiveOf(mCamera);
++  Selected selected;
++  const double current[6] = {
++      ReportedExposureCompensation(mExposureCompensation),
++      mExposureTime,
++      ReportedColorTemperature(),
++      mIso,
++      ReportedFocusDistance(),
++      mZoom};
++  for (size_t i = 0; i < sets.Length(); ++i) {
++    const SetType type = i == 0   ? SetType::Basic
++                         : i == 1 ? SetType::FirstAdvanced
++                                  : SetType::Advanced;
++    const bool mayReject = type != SetType::Advanced;
++    if (auto rejection = CheckSet(*sets[i], caps, type)) {
++      if (mayReject) {
++        return rejection;
++      }
++      continue;
++    }
++    ApplySet(*sets[i], caps, type, selected, mWhiteBalanceMode,
++             mExposureMode, mFocusMode, current);
++  }
++
++  // VideoCaptureCamera2's SetPhotoOptionsTask.
++  if (selected.mWhiteBalanceMode) {
++    mWhiteBalanceMode = *selected.mWhiteBalanceMode;
++  }
++  if (selected.mExposureMode) {
++    mExposureMode = *selected.mExposureMode;
++  }
++  if (selected.mFocusMode) {
++    mFocusMode = *selected.mFocusMode;
++  }
++  if (selected.mExposureCompensation) {
++    mExposureCompensation = *selected.mExposureCompensation;
++  }
++  if (selected.mExposureTime && *selected.mExposureTime != 0) {
++    // Held as whole nanoseconds.
++    mExposureTime =
++        std::trunc(*selected.mExposureTime * 100000.0) / 100000.0;
++  }
++  if (selected.mColorTemperature && *selected.mColorTemperature > 0) {
++    mColorTemperature = std::round(*selected.mColorTemperature);
++  }
++  if (selected.mIso && *selected.mIso > 0) {
++    mIso = std::round(*selected.mIso);
++  }
++  if (selected.mFocusDistance && *selected.mFocusDistance != 0) {
++    mFocusDistance = *selected.mFocusDistance;
++  }
++  if (selected.mZoom && *selected.mZoom > 0) {
++    mZoom = ReportedZoom(*selected.mZoom);
++  }
++  if (selected.mTorch) {
++    mTorch = *selected.mTorch;
++  }
++  return Nothing();
++}
++
++void AndroidCameraControls::ApplyInitialConstraints(
++    const MediaTrackConstraints& aConstraints) {
++  // The basic set's numeric values, where they fall in the camera's range.
++  auto value = [](const auto& aMember) -> Maybe<double> {
++    if (!aMember.WasPassed()) {
++      return Nothing();
++    }
++    const auto& v = aMember.Value();
++    if (v.IsDouble()) {
++      return Some(v.GetAsDouble());
++    }
++    if (v.IsConstrainDoubleRange()) {
++      const auto& range = v.GetAsConstrainDoubleRange();
++      if (range.mExact.WasPassed()) {
++        return Some(range.mExact.Value());
++      }
++      if (range.mIdeal.WasPassed()) {
++        return Some(range.mIdeal.Value());
++      }
++    }
++    return Nothing();
++  };
++  auto inRange = [](const Maybe<double>& aValue,
++                    const Maybe<AndroidCamera::Range>& aRange) {
++    return aValue && Reported(aRange) && InRange(*aRange, *aValue);
++  };
++  if (auto v = value(aConstraints.mExposureCompensation);
++      inRange(v, mCamera.mExposureCompensation)) {
++    mExposureCompensation = *v;
++  }
++  if (auto v = value(aConstraints.mExposureTime);
++      inRange(v, mCamera.mExposureTime) && *v != 0) {
++    mExposureTime = std::trunc(*v * 100000.0) / 100000.0;
++  }
++  if (auto v = value(aConstraints.mColorTemperature);
++      inRange(v, mCamera.mColorTemperature)) {
++    mColorTemperature = std::round(*v);
++  }
++  if (auto v = value(aConstraints.mIso); inRange(v, mCamera.mIso)) {
++    mIso = std::round(*v);
++  }
++  if (auto v = value(aConstraints.mFocusDistance);
++      inRange(v, mCamera.mFocusDistance)) {
++    mFocusDistance = *v;
++  }
++  if (auto v = value(aConstraints.mZoom); inRange(v, mCamera.mZoom)) {
++    mZoom = ReportedZoom(*v);
++  }
++  if (mCamera.mTorch && aConstraints.mTorch.WasPassed()) {
++    const auto& torch = aConstraints.mTorch.Value();
++    if (torch.IsBoolean()) {
++      mTorch = torch.GetAsBoolean();
++    } else {
++      const auto& params = torch.GetAsConstrainBooleanParameters();
++      if (params.mExact.WasPassed()) {
++        mTorch = params.mExact.Value();
++      } else if (params.mIdeal.WasPassed()) {
++        mTorch = params.mIdeal.Value();
++      }
++    }
++  }
++}
++
++void AndroidCameraControls::GetPhotoCapabilities(
++    dom::PhotoCapabilities& aOut) const {
++  aOut.mRedEyeReduction.Construct(mCamera.mTorch
++                                      ? dom::RedEyeReduction::Controllable
++                                      : dom::RedEyeReduction::Never);
++  int32_t minWidth = INT32_MAX, minHeight = INT32_MAX;
++  int32_t maxWidth = 0, maxHeight = 0;
++  for (const auto& size : mCamera.mPhotoSizes) {
++    minWidth = std::min(minWidth, size.width);
++    minHeight = std::min(minHeight, size.height);
++    maxWidth = std::max(maxWidth, size.width);
++    maxHeight = std::max(maxHeight, size.height);
++  }
++  SetRange(aOut.mImageHeight,
++           AndroidCamera::Range{double(minHeight), double(maxHeight), 1});
++  SetRange(aOut.mImageWidth,
++           AndroidCamera::Range{double(minWidth), double(maxWidth), 1});
++  if (mCamera.mTorch && !mCamera.mFillLightModes.empty()) {
++    auto& modes = aOut.mFillLightMode.Construct();
++    for (const auto& mode : mCamera.mFillLightModes) {
++      if (auto value = dom::StringToEnum<dom::FillLightMode>(mode)) {
++        (void)modes.AppendElement(*value, fallible);
++      }
++    }
++  }
++}
++
++void AndroidCameraControls::GetPhotoSettings(const gfx::IntSize& aTrackSize,
++                                             dom::PhotoSettings& aOut) const {
++  aOut.mImageHeight.Construct(mPhotoHeight > 0 ? mPhotoHeight
++                                               : aTrackSize.height);
++  aOut.mImageWidth.Construct(mPhotoWidth > 0 ? mPhotoWidth
++                                             : aTrackSize.width);
++}
++
++Maybe<nsCString> AndroidCameraControls::CheckPhotoSettings(
++    const dom::PhotoSettings& aSettings, bool aKnowsCapabilities) const {
++  if (!aKnowsCapabilities) {
++    return Nothing();
++  }
++  dom::PhotoCapabilities caps;
++  GetPhotoCapabilities(caps);
++  auto outside = [](double aValue, const dom::MediaSettingsRange& aRange) {
++    return aValue < aRange.mMin.Value() || aValue > aRange.mMax.Value();
++  };
++  if (aSettings.mImageHeight.WasPassed() &&
++      outside(aSettings.mImageHeight.Value(), caps.mImageHeight.Value())) {
++    return Some("imageHeight setting out of range"_ns);
++  }
++  if (aSettings.mImageWidth.WasPassed() &&
++      outside(aSettings.mImageWidth.Value(), caps.mImageWidth.Value())) {
++    return Some("imageWidth setting out of range"_ns);
++  }
++  if (aSettings.mRedEyeReduction.WasPassed() &&
++      caps.mRedEyeReduction.Value() != dom::RedEyeReduction::Controllable) {
++    return Some("redEyeReduction is not controllable."_ns);
++  }
++  if (aSettings.mFillLightMode.WasPassed() &&
++      caps.mFillLightMode.WasPassed() &&
++      !caps.mFillLightMode.Value().Contains(aSettings.mFillLightMode.Value())) {
++    return Some("Unsupported fillLightMode"_ns);
++  }
++  return Nothing();
++}
++
++void AndroidCameraControls::SetPhotoOptions(
++    const dom::PhotoSettings& aSettings) {
++  if (aSettings.mImageWidth.WasPassed() && aSettings.mImageWidth.Value() > 0) {
++    mPhotoWidth = static_cast<int32_t>(std::lround(aSettings.mImageWidth.Value()));
++  }
++  if (aSettings.mImageHeight.WasPassed() &&
++      aSettings.mImageHeight.Value() > 0) {
++    mPhotoHeight =
++        static_cast<int32_t>(std::lround(aSettings.mImageHeight.Value()));
++  }
++  if (aSettings.mRedEyeReduction.WasPassed()) {
++    mRedEyeReduction = aSettings.mRedEyeReduction.Value();
++  }
++  if (aSettings.mFillLightMode.WasPassed()) {
++    mFillLightMode = NS_ConvertASCIItoUTF16(
++        dom::GetEnumString(aSettings.mFillLightMode.Value()));
++  }
++}
++
++gfx::IntSize AndroidCameraControls::PhotoSize(
++    const gfx::IntSize& aTrackSize) const {
++  // VideoCaptureCamera2.findClosestSizeInArray.
++  const gfx::IntSize* closest = nullptr;
++  int64_t minDiff = INT64_MAX;
++  for (const auto& size : mCamera.mPhotoSizes) {
++    const int64_t diff =
++        (mPhotoWidth > 0 ? std::abs(size.width - mPhotoWidth) : 0) +
++        (mPhotoHeight > 0 ? std::abs(size.height - mPhotoHeight) : 0);
++    if (diff < minDiff) {
++      minDiff = diff;
++      closest = &size;
++    }
++  }
++  return closest ? *closest : aTrackSize;
++}
++
++/* static */
++bool AndroidCameraControls::HasImageCapture(const MediaTrackConstraintSet& aSet) {
++  return aSet.mWhiteBalanceMode.WasPassed() || aSet.mExposureMode.WasPassed() ||
++         aSet.mFocusMode.WasPassed() || aSet.mPointsOfInterest.WasPassed() ||
++         aSet.mExposureCompensation.WasPassed() ||
++         aSet.mExposureTime.WasPassed() || aSet.mColorTemperature.WasPassed() ||
++         aSet.mIso.WasPassed() || aSet.mBrightness.WasPassed() ||
++         aSet.mContrast.WasPassed() || aSet.mSaturation.WasPassed() ||
++         aSet.mSharpness.WasPassed() || aSet.mFocusDistance.WasPassed() ||
++         aSet.mPan.WasPassed() || aSet.mTilt.WasPassed() ||
++         aSet.mZoom.WasPassed() || aSet.mTorch.WasPassed();
++}
++
++/* static */
++bool AndroidCameraControls::HasNonImageCapture(
++    const MediaTrackConstraintSet& aSet) {
++  return aSet.mChannelCount.WasPassed() || aSet.mDeviceId.WasPassed() ||
++         aSet.mEchoCancellation.WasPassed() ||
++         aSet.mNoiseSuppression.WasPassed() ||
++         aSet.mAutoGainControl.WasPassed() || aSet.mFacingMode.WasPassed() ||
++         aSet.mResizeMode.WasPassed() || aSet.mFrameRate.WasPassed() ||
++         aSet.mGroupId.WasPassed() || aSet.mHeight.WasPassed() ||
++         aSet.mWidth.WasPassed();
++}
++
++/* static */
++bool AndroidCameraControls::AnySet(
++    const MediaTrackConstraints& aConstraints,
++    bool (*aPredicate)(const MediaTrackConstraintSet&)) {
++  if (aPredicate(aConstraints)) {
++    return true;
++  }
++  if (aConstraints.mAdvanced.WasPassed()) {
++    for (const auto& set : aConstraints.mAdvanced.Value()) {
++      if (aPredicate(set)) {
++        return true;
++      }
++    }
++  }
++  return false;
++}
++
++/* static */
++void AndroidCameraControls::StripImageCapture(
++    MediaTrackConstraints& aConstraints) {
++  auto strip = [](MediaTrackConstraintSet& aSet) {
++    aSet.mWhiteBalanceMode.Reset();
++    aSet.mExposureMode.Reset();
++    aSet.mFocusMode.Reset();
++    aSet.mPointsOfInterest.Reset();
++    aSet.mExposureCompensation.Reset();
++    aSet.mExposureTime.Reset();
++    aSet.mColorTemperature.Reset();
++    aSet.mIso.Reset();
++    aSet.mBrightness.Reset();
++    aSet.mContrast.Reset();
++    aSet.mSaturation.Reset();
++    aSet.mSharpness.Reset();
++    aSet.mFocusDistance.Reset();
++    aSet.mPan.Reset();
++    aSet.mTilt.Reset();
++    aSet.mZoom.Reset();
++    aSet.mTorch.Reset();
++  };
++  strip(aConstraints);
++  if (aConstraints.mAdvanced.WasPassed()) {
++    for (auto& set : aConstraints.mAdvanced.Value()) {
++      strip(set);
++    }
++  }
++}
++
+ }  // namespace mozilla
+diff --git a/dom/media/MediaDevices.cpp b/dom/media/MediaDevices.cpp
+index aba06b0a39..33b8c2db73 100644
+--- a/dom/media/MediaDevices.cpp
++++ b/dom/media/MediaDevices.cpp
+@@ -17,6 +17,7 @@
+ #include "mozilla/dom/MediaDeviceInfo.h"
+ #include "mozilla/dom/MediaDevicesBinding.h"
+ #include "mozilla/dom/MediaStreamBinding.h"
++#include "mozilla/dom/AndroidDevice.h"
+ #include "mozilla/dom/MediaTrackSupportedConstraintsBinding.h"
+ #include "mozilla/dom/NavigatorBinding.h"
+ #include "mozilla/dom/Promise.h"
+@@ -46,10 +47,77 @@ MediaDevices::~MediaDevices() {
+   mDeviceChangeListener.DisconnectIfExists();
+ }
+ 
+-// No code needed, unless controlled by prefs, as
+-// MediaTrackSupportedConstraints members default to true.
++// Camoufox: MediaTrackSupportedConstraints members have no defaults, so that
++// the Android device profiles can report Chrome's set instead of Firefox's.
+ void MediaDevices::GetSupportedConstraints(
+     MediaTrackSupportedConstraints& aResult) {
++  if (AndroidDevice::IsEmulated()) {
++    // Chrome's MediaTrackSupportedConstraints: every member it enables by
++    // default, which on Android leaves out background blur and the camera
++    // controls behind flags.
++    for (auto* member : {
++             &aResult.mAspectRatio,
++             &aResult.mAutoGainControl,
++             &aResult.mBrightness,
++             &aResult.mChannelCount,
++             &aResult.mColorTemperature,
++             &aResult.mContrast,
++             &aResult.mDeviceId,
++             &aResult.mDisplaySurface,
++             &aResult.mEchoCancellation,
++             &aResult.mExposureCompensation,
++             &aResult.mExposureMode,
++             &aResult.mExposureTime,
++             &aResult.mFacingMode,
++             &aResult.mFocusDistance,
++             &aResult.mFocusMode,
++             &aResult.mFrameRate,
++             &aResult.mGroupId,
++             &aResult.mHeight,
++             &aResult.mIso,
++             &aResult.mLatency,
++             &aResult.mNoiseSuppression,
++             &aResult.mPan,
++             &aResult.mPointsOfInterest,
++             &aResult.mResizeMode,
++             &aResult.mRestrictOwnAudio,
++             &aResult.mSampleRate,
++             &aResult.mSampleSize,
++             &aResult.mSaturation,
++             &aResult.mSharpness,
++             &aResult.mSuppressLocalAudioPlayback,
++             &aResult.mTilt,
++             &aResult.mTorch,
++             &aResult.mVoiceIsolation,
++             &aResult.mWhiteBalanceMode,
++             &aResult.mWidth,
++             &aResult.mZoom,
++         }) {
++      member->Construct(true);
++    }
++    return;
++  }
++  for (auto* member : {
++           &aResult.mWidth,
++           &aResult.mHeight,
++           &aResult.mFrameRate,
++           &aResult.mFacingMode,
++           &aResult.mEchoCancellation,
++           &aResult.mNoiseSuppression,
++           &aResult.mAutoGainControl,
++           &aResult.mChannelCount,
++           &aResult.mDeviceId,
++           &aResult.mGroupId,
++           &aResult.mMediaSource,
++           &aResult.mBrowserWindow,
++           &aResult.mScrollWithPage,
++           &aResult.mViewportOffsetX,
++           &aResult.mViewportOffsetY,
++           &aResult.mViewportWidth,
++           &aResult.mViewportHeight,
++       }) {
++    member->Construct(true);
++  }
+   if (Preferences::GetBool("media.navigator.video.resize_mode.enabled")) {
+     aResult.mResizeMode.Construct(true);
+   }
+diff --git a/dom/media/MediaManager.cpp b/dom/media/MediaManager.cpp
+index 29c4a816c8..ef8981ba62 100644
+--- a/dom/media/MediaManager.cpp
++++ b/dom/media/MediaManager.cpp
+@@ -871,6 +871,11 @@ class LocalTrackSource : public MediaStreamTrackSource {
+     }
+   }
+ 
++  AndroidCameraControls* GetAndroidCameraControls() override {
++    LocalMediaDevice* device = mListener ? mListener->GetDevice() : nullptr;
++    return device ? device->CameraControls() : nullptr;
++  }
++
+   void GetCapabilities(MediaTrackCapabilities& aOutCapabilities) override {
+     if (mListener) {
+       mListener->GetCapabilities(aOutCapabilities);
+@@ -1175,6 +1180,21 @@ void LocalMediaDevice::GetSettings(MediaTrackSettings& aOutSettings) {
+       Kind() == MediaDeviceKind::Videoinput) {
+     AndroidMediaDevices::AddSettings(mRawDevice->mRawName, aOutSettings);
+   }
++  if (AndroidCameraControls* controls = CameraControls()) {
++    controls->AddSettings(aOutSettings);
++  }
++}
++
++AndroidCameraControls* LocalMediaDevice::CameraControls() {
++  MOZ_ASSERT(NS_IsMainThread());
++  if (!mCameraControlsChecked) {
++    mCameraControlsChecked = true;
++    if (Kind() == MediaDeviceKind::Videoinput &&
++        GetMediaSource() == MediaSourceEnum::Camera) {
++      mCameraControls = AndroidCameraControls::Create(mRawDevice->mRawName);
++    }
++  }
++  return mCameraControls;
+ }
+ 
+ void LocalMediaDevice::GetCapabilities(
+@@ -1313,6 +1333,8 @@ already_AddRefed<LocalMediaDevice> LocalMediaDevice::Clone() const {
+   auto device = MakeRefPtr<LocalMediaDevice>(mRawDevice, mID, mGroupID, mName);
+   device->mSource =
+       mRawDevice->mEngine->CreateSourceFrom(mSource, device->mRawDevice);
++  device->mCameraControls = mCameraControls ? mCameraControls->Clone() : nullptr;
++  device->mCameraControlsChecked = mCameraControlsChecked;
+ #ifdef MOZ_THREAD_SAFETY_OWNERSHIP_CHECKS_SUPPORTED
+   // The source is normally created on the MediaManager thread. But for cloning,
+   // it ends up being created on main thread. Make sure its owning event target
+@@ -1820,6 +1842,9 @@ void GetUserMediaStreamTask::PrepareDOMStream() {
+         window, track, videoTrackSource, dom::MediaStreamTrackState::Live,
+         false, GetInvariant(mConstraints.mVideo));
+     domStream->AddTrackInternal(domTrack);
++    if (AndroidCameraControls* controls = mVideoDevice->CameraControls()) {
++      controls->ApplyInitialConstraints(GetInvariant(mConstraints.mVideo));
++    }
+     switch (mVideoDevice->GetMediaSource()) {
+       case MediaSourceEnum::Browser:
+       case MediaSourceEnum::Screen:
+diff --git a/dom/media/MediaManager.h b/dom/media/MediaManager.h
+index 3dac2943b3..f994c28486 100644
+--- a/dom/media/MediaManager.h
++++ b/dom/media/MediaManager.h
+@@ -9,6 +9,7 @@
+ #include "MediaEnginePrefs.h"
+ #include "MediaEventSource.h"
+ #include "PerformanceRecorder.h"
++#include "mozilla/AndroidCameraControls.h"
+ #include "mozilla/Attributes.h"
+ #include "mozilla/Logging.h"
+ #include "mozilla/Preferences.h"
+@@ -168,6 +169,9 @@ class LocalMediaDevice final : public nsIMediaDevice {
+   bool IsFake() const { return mRawDevice->mIsFake; }
+   const nsString& RawID() { return mRawDevice->mRawID; }
+   const dom::MediaTrackConstraints& Constraints() const;
++  // Camoufox: the Image Capture controls of an Android device profile's
++  // camera, or null. Main thread only.
++  AndroidCameraControls* CameraControls();
+ 
+  private:
+   virtual ~LocalMediaDevice() = default;
+@@ -192,6 +196,8 @@ class LocalMediaDevice final : public nsIMediaDevice {
+   RefPtr<MediaEngineSource> mSource;
+   // Currently applied constraints. Media thread only.
+   dom::MediaTrackConstraints mConstraints;
++  RefPtr<AndroidCameraControls> mCameraControls;
++  bool mCameraControlsChecked = false;
+ };
+ 
+ typedef nsRefPtrHashtable<nsUint64HashKey, GetUserMediaWindowListener>
+diff --git a/dom/media/MediaStreamTrack.cpp b/dom/media/MediaStreamTrack.cpp
+index e51efceac0..17d5e10fc4 100644
+--- a/dom/media/MediaStreamTrack.cpp
++++ b/dom/media/MediaStreamTrack.cpp
+@@ -9,7 +9,11 @@
+ #include "MediaStreamError.h"
+ #include "MediaTrackGraphImpl.h"
+ #include "MediaTrackListener.h"
++#include "mozilla/AndroidCameraControls.h"
+ #include "mozilla/BasePrincipal.h"
++#include "mozilla/dom/AndroidDevice.h"
++#include "mozilla/dom/Document.h"
++#include "mozilla/dom/MediaStreamTrackBinding.h"
+ #include "mozilla/dom/Promise.h"
+ #include "nsContentUtils.h"
+ #include "nsGlobalWindowInner.h"
+@@ -318,6 +322,9 @@ void MediaStreamTrack::GetCapabilities(MediaTrackCapabilities& aResult,
+ 
+ void MediaStreamTrack::GetConstraints(dom::MediaTrackConstraints& aResult) {
+   aResult = mConstraints;
++  if (!AndroidDevice::IsEmulated()) {
++    AndroidCameraControls::StripImageCapture(aResult);
++  }
+ }
+ 
+ void MediaStreamTrack::GetSettings(dom::MediaTrackSettings& aResult,
+@@ -355,6 +362,43 @@ already_AddRefed<Promise> MediaStreamTrack::ApplyConstraints(
+     return nullptr;
+   }
+ 
++  // Camoufox: a camera of the Android device profiles takes the Image Capture
++  // constraints itself, as Chrome's ImageCapture does: never mixed with
++  // others, and without reconfiguring the device.
++  if (AndroidCameraControls* controls = GetSource().GetAndroidCameraControls()) {
++    using Controls = AndroidCameraControls;
++    auto mixed = [](const MediaTrackConstraintSet& aSet) {
++      return Controls::HasImageCapture(aSet) &&
++             Controls::HasNonImageCapture(aSet);
++    };
++    if (Controls::AnySet(aConstraints, mixed)) {
++      auto error = MakeRefPtr<MediaMgrError>(
++          MediaMgrError::Name::OverconstrainedError,
++          "Mixing ImageCapture and non-ImageCapture constraints is not "
++          "currently supported"_ns);
++      promise->MaybeReject(MakeRefPtr<MediaStreamError>(mWindow, *error));
++      return promise.forget();
++    }
++    if (Controls::AnySet(aConstraints, Controls::HasImageCapture)) {
++      Document* doc = mWindow ? mWindow->GetExtantDoc() : nullptr;
++      const bool visible = doc && !doc->Hidden();
++      if (auto rejection = controls->ApplyConstraints(aConstraints, visible)) {
++        auto error = MakeRefPtr<MediaMgrError>(
++            rejection->mSecurity ? MediaMgrError::Name::SecurityError
++                                 : MediaMgrError::Name::OverconstrainedError,
++            rejection->mMessage,
++            NS_ConvertASCIItoUTF16(rejection->mConstraint));
++        promise->MaybeReject(MakeRefPtr<MediaStreamError>(mWindow, *error));
++        return promise.forget();
++      }
++      mConstraints = aConstraints;
++      NS_DispatchToCurrentThread(NS_NewRunnableFunction(
++          "MediaStreamTrack::ApplyImageCaptureConstraints",
++          [promise] { promise->MaybeResolveWithUndefined(); }));
++      return promise.forget();
++    }
++  }
++
+   // Forward constraints to the source.
+   //
+   // After GetSource().ApplyConstraints succeeds (after it's been to
+diff --git a/dom/media/MediaStreamTrack.h b/dom/media/MediaStreamTrack.h
+index fc1700b615..a6f7ef65b0 100644
+--- a/dom/media/MediaStreamTrack.h
++++ b/dom/media/MediaStreamTrack.h
+@@ -21,6 +21,8 @@
+ 
+ namespace mozilla {
+ 
++class AndroidCameraControls;
++
+ class DOMMediaStream;
+ class MediaEnginePhotoCallback;
+ class MediaInputPort;
+@@ -205,6 +207,10 @@ class MediaStreamTrackSource : public nsISupports {
+ 
+   virtual void GetCapabilities(dom::MediaTrackCapabilities& aResult) {};
+ 
++  // Camoufox: the Image Capture controls of an Android device profile's
++  // camera, for a camera source; null otherwise.
++  virtual AndroidCameraControls* GetAndroidCameraControls() { return nullptr; }
++
+   /**
+    * Called by the source interface when all registered sinks with
+    * KeepsSourceAlive() == true have unregistered.
+diff --git a/dom/media/imagecapture/CaptureTask.cpp b/dom/media/imagecapture/CaptureTask.cpp
+index 11c1a5b473..197ee34100 100644
+--- a/dom/media/imagecapture/CaptureTask.cpp
++++ b/dom/media/imagecapture/CaptureTask.cpp
+@@ -1,18 +1,14 @@
++/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+ /* This Source Code Form is subject to the terms of the Mozilla Public
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+ 
+ #include "CaptureTask.h"
+ 
++#include "ImageContainer.h"
+ #include "VideoSegment.h"
+-#include "gfxUtils.h"
+-#include "mozilla/SchedulerGroup.h"
+-#include "mozilla/dom/BlobImpl.h"
+-#include "mozilla/dom/ImageCapture.h"
+-#include "mozilla/dom/ImageCaptureError.h"
+-#include "mozilla/dom/ImageEncoder.h"
+ #include "mozilla/dom/MediaStreamTrack.h"
+-#include "mozilla/dom/VideoStreamTrack.h"
+ #include "nsThreadUtils.h"
+ 
+ namespace mozilla {
+@@ -24,73 +20,38 @@ class CaptureTask::MediaTrackEventListener : public MediaTrackListener {
+ 
+   // MediaTrackListener methods.
+   void NotifyEnded(MediaTrackGraph* aGraph) override {
+-    mCaptureTask->PostTrackEndEvent();
++    mCaptureTask->PostComplete(nullptr);
+   }
+ 
+  private:
+   CaptureTask* mCaptureTask;
+ };
+ 
+-CaptureTask::CaptureTask(dom::ImageCapture* aImageCapture)
+-    : mImageCapture(aImageCapture),
++CaptureTask::CaptureTask(dom::MediaStreamTrack* aTrack, Callback&& aCallback)
++    : mTrack(aTrack),
++      mCallback(std::move(aCallback)),
+       mEventListener(new MediaTrackEventListener(this)),
+       mImageGrabbedOrTrackEnd(false),
+       mPrincipalChanged(false) {}
+ 
+-nsresult CaptureTask::TaskComplete(already_AddRefed<dom::BlobImpl> aBlobImpl,
+-                                   nsresult aRv) {
+-  MOZ_ASSERT(NS_IsMainThread());
+-
+-  DetachTrack();
+-
+-  nsresult rv;
+-  RefPtr<dom::BlobImpl> blobImpl(aBlobImpl);
+-
+-  // We have to set the parent because the blob has been generated with a valid
+-  // one.
+-  RefPtr<dom::Blob> blob;
+-  if (blobImpl) {
+-    blob = dom::Blob::Create(mImageCapture->GetRelevantGlobal(), blobImpl);
+-    if (NS_WARN_IF(!blob)) {
+-      return NS_ERROR_FAILURE;
+-    }
+-  }
+-
+-  if (mPrincipalChanged) {
+-    aRv = NS_ERROR_DOM_SECURITY_ERR;
+-    IC_LOG("MediaStream principal should not change during TakePhoto().");
+-  }
+-
+-  if (NS_SUCCEEDED(aRv)) {
+-    rv = mImageCapture->PostBlobEvent(blob);
+-  } else {
+-    rv =
+-        mImageCapture->PostErrorEvent(dom::ImageCaptureError::PHOTO_ERROR, aRv);
+-  }
+-
+-  // Ensure ImageCapture dereference on main thread here because the TakePhoto()
+-  // sequences stopped here.
+-  mImageCapture = nullptr;
+-
+-  return rv;
+-}
+-
+ void CaptureTask::AttachTrack() {
+   MOZ_ASSERT(NS_IsMainThread());
+-
+-  dom::MediaStreamTrack* track = mImageCapture->GetVideoStreamTrack();
+-  track->AddPrincipalChangeObserver(this);
+-  track->AddListener(mEventListener.get());
+-  track->AddDirectListener(this);
++  mTrack->AddPrincipalChangeObserver(this);
++  mTrack->AddListener(mEventListener.get());
++  mTrack->AddDirectListener(this);
+ }
+ 
+-void CaptureTask::DetachTrack() {
++void CaptureTask::Complete(layers::Image* aImage) {
+   MOZ_ASSERT(NS_IsMainThread());
+-
+-  dom::MediaStreamTrack* track = mImageCapture->GetVideoStreamTrack();
++  if (!mTrack) {
++    return;
++  }
++  RefPtr<dom::MediaStreamTrack> track = std::move(mTrack);
+   track->RemovePrincipalChangeObserver(this);
+   track->RemoveListener(mEventListener.get());
+   track->RemoveDirectListener(this);
++  Callback callback = std::move(mCallback);
++  callback(mPrincipalChanged ? nullptr : aImage);
+ }
+ 
+ void CaptureTask::PrincipalChanged(dom::MediaStreamTrack* aMediaStreamTrack) {
+@@ -104,94 +65,35 @@ void CaptureTask::NotifyRealtimeTrackData(MediaTrackGraph* aGraph,
+   MOZ_ASSERT(aMedia.GetType() == MediaSegment::VIDEO);
+   const VideoSegment& video = static_cast<const VideoSegment&>(aMedia);
+ 
+-  // Callback for encoding complete, it calls on main thread.
+-  class EncodeComplete : public dom::EncodeCompleteCallback {
+-   public:
+-    explicit EncodeComplete(CaptureTask* aTask) : mTask(aTask) {}
+-
+-    bool CanBeDeletedOnAnyThread() override {
+-      // EncodeComplete is used from the main thread only.
+-      return false;
+-    }
+-
+-    nsresult ReceiveBlobImpl(
+-        already_AddRefed<dom::BlobImpl> aBlobImpl) override {
+-      MOZ_ASSERT(NS_IsMainThread());
+-      RefPtr<dom::BlobImpl> blobImpl(aBlobImpl);
+-      mTask->TaskComplete(blobImpl.forget(), NS_OK);
+-      mTask = nullptr;
+-      return NS_OK;
+-    }
+-
+-   protected:
+-    RefPtr<CaptureTask> mTask;
+-  };
+-
+   for (VideoSegment::ConstChunkIterator iter(video); !iter.IsEnded();
+        iter.Next()) {
+     VideoChunk chunk = *iter;
+-
+-    // Extract the first valid video frame.
+-    VideoFrame frame;
+     if (chunk.IsNull()) {
+       continue;
+     }
+-
+     RefPtr<layers::Image> image;
+     if (chunk.mFrame.GetForceBlack()) {
+-      // Create a black image.
+       image = VideoFrame::CreateBlackImage(chunk.mFrame.GetIntrinsicSize());
+     } else {
+       image = chunk.mFrame.GetImage();
+     }
+     if (!image) {
+-      MOZ_ASSERT(image);
+       continue;
+     }
+-
+-    bool wasGrabbed = mImageGrabbedOrTrackEnd.exchange(true);
+-    if (wasGrabbed) {
+-      return;
+-    }
+-
+-    // Encode image.
+-    nsresult rv;
+-    nsAutoString type(u"image/jpeg"_ns);
+-    nsAutoString options;
+-    rv = dom::ImageEncoder::ExtractDataFromLayersImageAsync(
+-        type, options, false, image, CanvasUtils::ImageExtraction::Unrestricted,
+-        VoidCString(), new EncodeComplete(this));
+-    if (NS_FAILED(rv)) {
+-      PostTrackEndEvent();
+-    }
++    PostComplete(std::move(image));
++    return;
+   }
+ }
+ 
+-void CaptureTask::PostTrackEndEvent() {
+-  bool wasGrabbed = mImageGrabbedOrTrackEnd.exchange(true);
+-  if (wasGrabbed) {
++void CaptureTask::PostComplete(RefPtr<layers::Image> aImage) {
++  if (mImageGrabbedOrTrackEnd.exchange(true)) {
+     return;
+   }
+-
+-  // Got track end or finish event, stop the task.
+-  class TrackEndRunnable : public Runnable {
+-   public:
+-    explicit TrackEndRunnable(CaptureTask* aTask)
+-        : mozilla::Runnable("TrackEndRunnable"), mTask(aTask) {}
+-
+-    NS_IMETHOD Run() override {
+-      mTask->TaskComplete(nullptr, NS_ERROR_FAILURE);
+-      mTask = nullptr;
+-      return NS_OK;
+-    }
+-
+-   protected:
+-    RefPtr<CaptureTask> mTask;
+-  };
+-
+-  IC_LOG("Got MediaTrack track removed or finished event.");
+-  nsCOMPtr<nsIRunnable> event = new TrackEndRunnable(this);
+-  SchedulerGroup::Dispatch(event.forget());
++  NS_DispatchToMainThread(NS_NewRunnableFunction(
++      "CaptureTask::Complete",
++      [self = RefPtr(this), image = std::move(aImage)] {
++        self->Complete(image);
++      }));
+ }
+ 
+ }  // namespace mozilla
+diff --git a/dom/media/imagecapture/CaptureTask.h b/dom/media/imagecapture/CaptureTask.h
+index 3f064742fc..702038235f 100644
+--- a/dom/media/imagecapture/CaptureTask.h
++++ b/dom/media/imagecapture/CaptureTask.h
+@@ -1,3 +1,5 @@
++/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+ /* This Source Code Form is subject to the terms of the Mozilla Public
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+@@ -5,6 +7,8 @@
+ #ifndef CAPTURETASK_H
+ #define CAPTURETASK_H
+ 
++#include <functional>
++
+ #include "MediaTrackGraph.h"
+ #include "MediaTrackListener.h"
+ #include "PrincipalChangeObserver.h"
+@@ -12,25 +16,28 @@
+ namespace mozilla {
+ 
+ namespace dom {
+-class BlobImpl;
+-class ImageCapture;
+ class MediaStreamTrack;
+ }  // namespace dom
+ 
++namespace layers {
++class Image;
++}  // namespace layers
++
+ /**
+- * CaptureTask retrieves image from MediaTrack and encodes the image to jpeg in
+- * ImageEncoder. The whole procedures start at AttachTrack(), it will add this
+- * class into MediaTrack and retrieves an image in MediaTrackGraph thread.
+- * Once the image is retrieved, it will be sent to ImageEncoder and the encoded
+- * blob will be sent out via encoder callback in main thread.
+- *
+- * CaptureTask holds a reference of ImageCapture to ensure ImageCapture won't be
+- * released during the period of the capturing process described above.
++ * Grabs the next frame of a video track for ImageCapture. The callback runs
++ * once, on the main thread, with the frame, or with null when the track ended
++ * or its principal changed first.
+  */
+ class CaptureTask : public DirectMediaTrackListener,
+                     public dom::PrincipalChangeObserver<dom::MediaStreamTrack> {
+  public:
+   class MediaTrackEventListener;
++  using Callback = std::function<void(layers::Image*)>;
++
++  CaptureTask(dom::MediaStreamTrack* aTrack, Callback&& aCallback);
++
++  // Starts listening to the track. Main thread only.
++  void AttachTrack();
+ 
+   // DirectMediaTrackListener methods
+   void NotifyRealtimeTrackData(MediaTrackGraph* aGraph, TrackTime aTrackOffset,
+@@ -39,47 +46,24 @@ class CaptureTask : public DirectMediaTrackListener,
+   // PrincipalChangeObserver<MediaStreamTrack> methods
+   void PrincipalChanged(dom::MediaStreamTrack* aMediaStreamTrack) override;
+ 
+-  // CaptureTask methods.
+-
+-  // It is called when aBlob is ready to post back to script in company with
+-  // aRv == NS_OK. If aRv is not NS_OK, it will post an error event to script.
+-  //
+-  // Note:
+-  //   this function should be called on main thread.
+-  nsresult TaskComplete(already_AddRefed<dom::BlobImpl> aBlobImpl,
+-                        nsresult aRv);
+-
+-  // Add listeners into MediaStreamTrack and PrincipalChangeObserver.
+-  // It should be on main thread only.
+-  void AttachTrack();
+-
+-  // Remove listeners from MediaStreamTrack and PrincipalChangeObserver.
+-  // It should be on main thread only.
+-  void DetachTrack();
+-
+-  // CaptureTask should be created on main thread.
+-  explicit CaptureTask(dom::ImageCapture* aImageCapture);
+-
+  protected:
+   virtual ~CaptureTask() = default;
+ 
+-  // Post a runnable on main thread to end this task and call TaskComplete to
+-  // post error event to script. It is called off-main-thread.
+-  void PostTrackEndEvent();
++  // Runs the callback on the main thread, once. Any thread.
++  void PostComplete(RefPtr<layers::Image> aImage);
++  void Complete(layers::Image* aImage);
+ 
+-  // The ImageCapture associates with this task. This reference count should not
+-  // change in this class unless it clears this reference after a blob or error
+-  // event to script.
+-  RefPtr<dom::ImageCapture> mImageCapture;
++  // Main thread only; cleared on completion.
++  RefPtr<dom::MediaStreamTrack> mTrack;
++  Callback mCallback;
+ 
+   RefPtr<MediaTrackEventListener> mEventListener;
+ 
+-  // True when an image is retrieved from the video track, or MediaTrackGraph
+-  // sends a track finish, end, or removed event. Any thread.
++  // True once a frame is grabbed or the track ended. Any thread.
+   Atomic<bool> mImageGrabbedOrTrackEnd;
+ 
+-  // True after MediaStreamTrack principal changes while waiting for a photo
+-  // to finish and we should raise a security error.
++  // True after the track's principal changed while waiting for a frame.
++  // Main thread only.
+   bool mPrincipalChanged;
+ };
+ 
+diff --git a/dom/media/imagecapture/ImageCapture.cpp b/dom/media/imagecapture/ImageCapture.cpp
+index a5e21c9f11..cd1b0799c9 100644
+--- a/dom/media/imagecapture/ImageCapture.cpp
++++ b/dom/media/imagecapture/ImageCapture.cpp
+@@ -1,3 +1,5 @@
++/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+ /* This Source Code Form is subject to the terms of the Mozilla Public
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+@@ -5,197 +7,238 @@
+ #include "ImageCapture.h"
+ 
+ #include "CaptureTask.h"
+-#include "MediaEngineSource.h"
+-#include "mozilla/dom/BlobEvent.h"
+-#include "mozilla/dom/DOMException.h"
+-#include "mozilla/dom/Document.h"
+-#include "mozilla/dom/Event.h"
++#include "ImageContainer.h"
++#include "mozilla/AndroidCameraControls.h"
++#include "mozilla/dom/BlobImpl.h"
+ #include "mozilla/dom/File.h"
+-#include "mozilla/dom/ImageCaptureError.h"
+-#include "mozilla/dom/ImageCaptureErrorEvent.h"
+-#include "mozilla/dom/ImageCaptureErrorEventBinding.h"
+-#include "mozilla/dom/VideoStreamTrack.h"
+-#include "nsGlobalWindowInner.h"
++#include "mozilla/dom/ImageBitmap.h"
++#include "mozilla/dom/ImageEncoder.h"
++#include "mozilla/dom/MediaStreamTrack.h"
++#include "mozilla/dom/MediaTrackSettingsBinding.h"
++#include "mozilla/dom/Promise.h"
++#include "mozilla/gfx/2D.h"
++#include "nsIGlobalObject.h"
++#include "nsThreadUtils.h"
++
++namespace mozilla::dom {
++
++namespace {
++
++constexpr auto kInvalidStateTrackError =
++    "The associated Track is in an invalid state"_ns;
++constexpr auto kPlatformError = "platform error"_ns;
++
++// Resolves or rejects a promise in a later task, as Blink's answers come
++// back from the capture service.
++template <typename F>
++void Later(F&& aFunction) {
++  NS_DispatchToCurrentThread(NS_NewRunnableFunction(
++      "ImageCapture::Reply", std::forward<F>(aFunction)));
++}
+ 
+-namespace mozilla {
++class PhotoEncoded final : public EncodeCompleteCallback {
++ public:
++  PhotoEncoded(nsIGlobalObject* aGlobal, Promise* aPromise)
++      : mGlobal(aGlobal), mPromise(aPromise) {}
++
++  bool CanBeDeletedOnAnyThread() override { return false; }
++
++  nsresult ReceiveBlobImpl(already_AddRefed<BlobImpl> aBlobImpl) override {
++    MOZ_ASSERT(NS_IsMainThread());
++    RefPtr<BlobImpl> blobImpl(aBlobImpl);
++    RefPtr<Blob> blob = blobImpl ? Blob::Create(mGlobal, blobImpl) : nullptr;
++    if (blob) {
++      mPromise->MaybeResolve(blob);
++    } else {
++      mPromise->MaybeRejectWithUnknownError(kPlatformError);
++    }
++    mGlobal = nullptr;
++    mPromise = nullptr;
++    return NS_OK;
++  }
+ 
+-LogModule* GetICLog() {
+-  static LazyLogModule log("ImageCapture");
+-  return log;
++ private:
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  RefPtr<Promise> mPromise;
++};
++
++// A JPEG of the frame at the photo size, as the camera's still capture.
++void EncodePhoto(nsIGlobalObject* aGlobal, Promise* aPromise,
++                 layers::Image* aFrame, const gfx::IntSize& aSize) {
++  RefPtr<gfx::SourceSurface> source = aFrame->GetAsSourceSurface();
++  RefPtr<gfx::DrawTarget> target =
++      source ? gfx::Factory::CreateDrawTarget(gfx::BackendType::SKIA, aSize,
++                                              gfx::SurfaceFormat::B8G8R8X8)
++             : nullptr;
++  if (!target) {
++    aPromise->MaybeRejectWithUnknownError(kPlatformError);
++    return;
++  }
++  const gfx::IntSize sourceSize = source->GetSize();
++  target->DrawSurface(
++      source, gfx::Rect(0, 0, aSize.width, aSize.height),
++      gfx::Rect(0, 0, sourceSize.width, sourceSize.height),
++      gfx::DrawSurfaceOptions(gfx::SamplingFilter::GOOD));
++  RefPtr<gfx::SourceSurface> scaled = target->Snapshot();
++  RefPtr<layers::Image> image = new layers::SourceSurfaceImage(aSize, scaled);
++  nsAutoString type(u"image/jpeg"_ns);
++  nsresult rv = ImageEncoder::ExtractDataFromLayersImageAsync(
++      type, u"quality=95"_ns, true, image,
++      CanvasUtils::ImageExtraction::Unrestricted, VoidCString(),
++      new PhotoEncoded(aGlobal, aPromise));
++  if (NS_FAILED(rv)) {
++    aPromise->MaybeRejectWithUnknownError(kPlatformError);
++  }
+ }
+ 
+-namespace dom {
+-
+-NS_IMPL_CYCLE_COLLECTION_INHERITED(ImageCapture, DOMEventTargetHelper, mTrack)
++}  // namespace
+ 
++NS_IMPL_CYCLE_COLLECTION_WRAPPERCACHE(ImageCapture, mGlobal, mTrack)
++NS_IMPL_CYCLE_COLLECTING_ADDREF(ImageCapture)
++NS_IMPL_CYCLE_COLLECTING_RELEASE(ImageCapture)
+ NS_INTERFACE_MAP_BEGIN_CYCLE_COLLECTION(ImageCapture)
+-NS_INTERFACE_MAP_END_INHERITING(DOMEventTargetHelper)
++  NS_WRAPPERCACHE_INTERFACE_MAP_ENTRY
++  NS_INTERFACE_MAP_ENTRY(nsISupports)
++NS_INTERFACE_MAP_END
+ 
+-NS_IMPL_ADDREF_INHERITED(ImageCapture, DOMEventTargetHelper)
+-NS_IMPL_RELEASE_INHERITED(ImageCapture, DOMEventTargetHelper)
++ImageCapture::ImageCapture(nsIGlobalObject* aGlobal, MediaStreamTrack* aTrack)
++    : mGlobal(aGlobal), mTrack(aTrack) {}
+ 
+-ImageCapture::ImageCapture(VideoStreamTrack* aTrack,
+-                           nsPIDOMWindowInner* aOwnerWindow)
+-    : DOMEventTargetHelper(aOwnerWindow), mTrack(aTrack) {
+-  MOZ_ASSERT(aOwnerWindow);
+-  MOZ_ASSERT(aTrack);
++JSObject* ImageCapture::WrapObject(JSContext* aCx,
++                                   JS::Handle<JSObject*> aGivenProto) {
++  return ImageCapture_Binding::Wrap(aCx, this, aGivenProto);
+ }
+ 
+-ImageCapture::~ImageCapture() { MOZ_ASSERT(NS_IsMainThread()); }
+-
++/* static */
+ already_AddRefed<ImageCapture> ImageCapture::Constructor(
+     const GlobalObject& aGlobal, MediaStreamTrack& aTrack, ErrorResult& aRv) {
+-  nsCOMPtr<nsPIDOMWindowInner> win = do_QueryInterface(aGlobal.GetAsSupports());
+-  if (!win) {
++  nsCOMPtr<nsIGlobalObject> global = do_QueryInterface(aGlobal.GetAsSupports());
++  if (!global) {
+     aRv.Throw(NS_ERROR_FAILURE);
+     return nullptr;
+   }
+-
+   if (!aTrack.AsVideoStreamTrack()) {
+-    aRv.Throw(NS_ERROR_DOM_NOT_SUPPORTED_ERR);
++    aRv.ThrowNotSupportedError(
++        "Cannot create an ImageCapturer from a non-video Track."_ns);
+     return nullptr;
+   }
+-
+-  RefPtr<ImageCapture> object =
+-      new ImageCapture(aTrack.AsVideoStreamTrack(), win);
+-
+-  return object.forget();
++  return do_AddRef(new ImageCapture(global, &aTrack));
+ }
+ 
+-MediaStreamTrack* ImageCapture::GetVideoStreamTrack() const { return mTrack; }
+-
+-nsresult ImageCapture::TakePhotoByMediaEngine() {
+-  // Callback for TakPhoto(), it also monitor the principal. If principal
+-  // changes, it returns PHOTO_ERROR with security error.
+-  class TakePhotoCallback : public MediaEnginePhotoCallback,
+-                            public PrincipalChangeObserver<MediaStreamTrack> {
+-   public:
+-    TakePhotoCallback(VideoStreamTrack* aVideoTrack,
+-                      ImageCapture* aImageCapture)
+-        : mVideoTrack(aVideoTrack),
+-          mImageCapture(aImageCapture),
+-          mPrincipalChanged(false) {
+-      MOZ_ASSERT(NS_IsMainThread());
+-      mVideoTrack->AddPrincipalChangeObserver(this);
+-    }
+-
+-    void PrincipalChanged(MediaStreamTrack* aMediaStream) override {
+-      mPrincipalChanged = true;
+-    }
+-
+-    nsresult PhotoComplete(already_AddRefed<Blob> aBlob) override {
+-      RefPtr<Blob> blob = aBlob;
+-
+-      if (mPrincipalChanged) {
+-        return PhotoError(NS_ERROR_DOM_SECURITY_ERR);
+-      }
+-      return mImageCapture->PostBlobEvent(blob);
+-    }
+-
+-    nsresult PhotoError(nsresult aRv) override {
+-      return mImageCapture->PostErrorEvent(ImageCaptureError::PHOTO_ERROR, aRv);
+-    }
+-
+-   protected:
+-    ~TakePhotoCallback() {
+-      MOZ_ASSERT(NS_IsMainThread());
+-      mVideoTrack->RemovePrincipalChangeObserver(this);
+-    }
+-
+-    const RefPtr<VideoStreamTrack> mVideoTrack;
+-    const RefPtr<ImageCapture> mImageCapture;
+-    bool mPrincipalChanged;
+-  };
+-
+-  RefPtr<MediaEnginePhotoCallback> callback =
+-      new TakePhotoCallback(mTrack, this);
+-  return mTrack->GetSource().TakePhoto(callback);
+-}
+-
+-void ImageCapture::TakePhoto(ErrorResult& aResult) {
+-  // According to spec, MediaStreamTrack.readyState must be "live"; however
+-  // gecko doesn't implement it yet (bug 910249). Instead of readyState, we
+-  // check MediaStreamTrack.enable before bug 910249 is fixed.
+-  // The error code should be INVALID_TRACK, but spec doesn't define it in
+-  // ImageCaptureError. So it returns PHOTO_ERROR here before spec updates.
+-  if (!mTrack->Enabled()) {
+-    PostErrorEvent(ImageCaptureError::PHOTO_ERROR, NS_ERROR_FAILURE);
+-    return;
++bool ImageCapture::RejectIfInactive(Promise* aPromise) const {
++  if (mTrack->Ended() || !mTrack->Enabled()) {
++    aPromise->MaybeRejectWithInvalidStateError(kInvalidStateTrackError);
++    return true;
+   }
++  return false;
++}
+ 
+-  // Try if MediaEngine supports taking photo.
+-  nsresult rv = TakePhotoByMediaEngine();
++AndroidCameraControls* ImageCapture::Controls() const {
++  return mTrack->GetSource().GetAndroidCameraControls();
++}
+ 
+-  // It falls back to MediaTrackGraph image capture if MediaEngine doesn't
+-  // support TakePhoto().
+-  if (rv == NS_ERROR_NOT_IMPLEMENTED) {
+-    IC_LOG(
+-        "MediaEngine doesn't support TakePhoto(), it falls back to "
+-        "MediaTrackGraph.");
+-    RefPtr<CaptureTask> task = new CaptureTask(this);
++gfx::IntSize ImageCapture::TrackSize() const {
++  MediaTrackSettings settings;
++  mTrack->GetSettings(settings, CallerType::NonSystem);
++  return gfx::IntSize(
++      settings.mWidth.WasPassed() ? settings.mWidth.Value() : 0,
++      settings.mHeight.WasPassed() ? settings.mHeight.Value() : 0);
++}
+ 
+-    // It adds itself into MediaTrackGraph, so ImageCapture doesn't need to
+-    // hold the reference.
+-    task->AttachTrack();
++already_AddRefed<Promise> ImageCapture::GetPhotoCapabilities(ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed() || RejectIfInactive(promise)) {
++    return promise.forget();
+   }
++  RefPtr<AndroidCameraControls> controls = Controls();
++  mKnowsPhotoCapabilities = true;
++  Later([promise, controls] {
++    if (!controls) {
++      promise->MaybeRejectWithUnknownError(kPlatformError);
++      return;
++    }
++    PhotoCapabilities capabilities;
++    controls->GetPhotoCapabilities(capabilities);
++    promise->MaybeResolve(capabilities);
++  });
++  return promise.forget();
+ }
+ 
+-nsresult ImageCapture::PostBlobEvent(Blob* aBlob) {
+-  MOZ_ASSERT(NS_IsMainThread());
+-  if (!CheckPrincipal()) {
+-    // Media is not same-origin, don't allow the data out.
+-    return PostErrorEvent(ImageCaptureError::PHOTO_ERROR,
+-                          NS_ERROR_DOM_SECURITY_ERR);
++already_AddRefed<Promise> ImageCapture::GetPhotoSettings(ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed() || RejectIfInactive(promise)) {
++    return promise.forget();
+   }
+-
+-  BlobEventInit init;
+-  init.mBubbles = false;
+-  init.mCancelable = false;
+-  init.mData = aBlob;
+-
+-  RefPtr<BlobEvent> blob_event =
+-      BlobEvent::Constructor(this, u"photo"_ns, init);
+-
+-  return DispatchTrustedEvent(blob_event);
++  RefPtr<AndroidCameraControls> controls = Controls();
++  mKnowsPhotoCapabilities = true;
++  Later([promise, controls, size = TrackSize()] {
++    if (!controls) {
++      promise->MaybeRejectWithUnknownError(kPlatformError);
++      return;
++    }
++    PhotoSettings settings;
++    controls->GetPhotoSettings(size, settings);
++    promise->MaybeResolve(settings);
++  });
++  return promise.forget();
+ }
+ 
+-nsresult ImageCapture::PostErrorEvent(uint16_t aErrorCode, nsresult aReason) {
+-  MOZ_ASSERT(NS_IsMainThread());
+-  nsresult rv = CheckCurrentGlobalCorrectness();
+-  NS_ENSURE_SUCCESS(rv, rv);
+-
+-  nsString errorMsg;
+-  if (NS_FAILED(aReason)) {
+-    nsCString name, message;
+-    rv = NS_GetNameAndMessageForDOMNSResult(aReason, name, message);
+-    if (NS_SUCCEEDED(rv)) {
+-      CopyASCIItoUTF16(message, errorMsg);
+-    }
++already_AddRefed<Promise> ImageCapture::TakePhoto(
++    const PhotoSettings& aPhotoSettings, ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed() || RejectIfInactive(promise)) {
++    return promise.forget();
+   }
+-
+-  RefPtr<ImageCaptureError> error = new ImageCaptureError(
+-      static_cast<EventTarget*>(this), aErrorCode, errorMsg);
+-
+-  ImageCaptureErrorEventInit init;
+-  init.mBubbles = false;
+-  init.mCancelable = false;
+-  init.mImageCaptureError = error;
+-
+-  RefPtr<Event> event =
+-      ImageCaptureErrorEvent::Constructor(this, u"error"_ns, init);
+-
+-  return DispatchTrustedEvent(event);
++  RefPtr<AndroidCameraControls> controls = Controls();
++  if (!controls) {
++    promise->MaybeRejectWithUnknownError(kPlatformError);
++    return promise.forget();
++  }
++  if (auto error =
++          controls->CheckPhotoSettings(aPhotoSettings, mKnowsPhotoCapabilities)) {
++    promise->MaybeRejectWithNotSupportedError(*error);
++    return promise.forget();
++  }
++  controls->SetPhotoOptions(aPhotoSettings);
++  mKnowsPhotoCapabilities = true;
++  const gfx::IntSize size = controls->PhotoSize(TrackSize());
++  RefPtr task = new CaptureTask(
++      mTrack, [global = mGlobal, promise, size](layers::Image* aFrame) {
++        if (!aFrame) {
++          promise->MaybeRejectWithUnknownError(kPlatformError);
++          return;
++        }
++        EncodePhoto(global, promise, aFrame, size);
++      });
++  task->AttachTrack();
++  return promise.forget();
+ }
+ 
+-bool ImageCapture::CheckPrincipal() {
+-  MOZ_ASSERT(NS_IsMainThread());
+-  nsCOMPtr<nsIPrincipal> principal = mTrack->GetPrincipal();
+-  if (!GetOwnerWindow()) {
+-    return false;
++already_AddRefed<Promise> ImageCapture::GrabFrame(ErrorResult& aRv) {
++  RefPtr<Promise> promise = Promise::Create(mGlobal, aRv);
++  if (aRv.Failed() || RejectIfInactive(promise)) {
++    return promise.forget();
+   }
+-  nsCOMPtr<Document> doc = GetOwnerWindow()->GetExtantDoc();
+-  return doc && principal && doc->NodePrincipal()->Subsumes(principal);
++  RefPtr task = new CaptureTask(
++      mTrack, [global = mGlobal, promise](layers::Image* aFrame) {
++        RefPtr<gfx::SourceSurface> surface =
++            aFrame ? aFrame->GetAsSourceSurface() : nullptr;
++        if (!surface) {
++          promise->MaybeRejectWithUnknownError(kPlatformError);
++          return;
++        }
++        ErrorResult rv;
++        RefPtr<ImageBitmap> bitmap =
++            ImageBitmap::CreateFromSourceSurface(global, surface, rv);
++        if (rv.Failed() || !bitmap) {
++          rv.SuppressException();
++          promise->MaybeRejectWithUnknownError(kPlatformError);
++          return;
++        }
++        promise->MaybeResolve(bitmap);
++      });
++  task->AttachTrack();
++  return promise.forget();
+ }
+ 
+-}  // namespace dom
+-}  // namespace mozilla
++}  // namespace mozilla::dom
+diff --git a/dom/media/imagecapture/ImageCapture.h b/dom/media/imagecapture/ImageCapture.h
+index 359eb850ea..b26d580881 100644
+--- a/dom/media/imagecapture/ImageCapture.h
++++ b/dom/media/imagecapture/ImageCapture.h
+@@ -1,3 +1,5 @@
++/* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
++/* vim: set ts=8 sts=2 et sw=2 tw=80: */
+ /* This Source Code Form is subject to the terms of the Mozilla Public
+  * License, v. 2.0. If a copy of the MPL was not distributed with this
+  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+@@ -5,86 +7,67 @@
+ #ifndef IMAGECAPTURE_H
+ #define IMAGECAPTURE_H
+ 
+-#include "mozilla/DOMEventTargetHelper.h"
+-#include "mozilla/Logging.h"
++#include "mozilla/dom/AndroidDevice.h"
+ #include "mozilla/dom/ImageCaptureBinding.h"
++#include "mozilla/gfx/Point.h"
++#include "nsCOMPtr.h"
++#include "nsCycleCollectionParticipant.h"
++#include "nsWrapperCache.h"
++
++class nsIGlobalObject;
+ 
+ namespace mozilla {
+ 
+-#ifndef IC_LOG
+-LogModule* GetICLog();
+-#  define IC_LOG(...) \
+-    MOZ_LOG(GetICLog(), mozilla::LogLevel::Debug, (__VA_ARGS__))
+-#endif
++class AndroidCameraControls;
++class ErrorResult;
+ 
+ namespace dom {
+ 
+-class Blob;
+ class MediaStreamTrack;
+-class VideoStreamTrack;
++class Promise;
+ 
+ /**
+- * Implementation of https://dvcs.w3.org/hg/dap/raw-file/default/media-stream-
+- * capture/ImageCapture.html.
+- * The ImageCapture accepts a video MediaStreamTrack as input source. The image
+- * will be sent back as a JPG format via Blob event.
+- *
+- * All the functions in ImageCapture are run in main thread.
+- *
+- * There are two ways to capture image, MediaEngineSource and MediaTrackGraph.
+- * When the implementation of MediaEngineSource supports TakePhoto(),
+- * it uses the platform camera to grab image. Otherwise, it falls back
+- * to the MediaTrackGraph way.
++ * Camoufox: the Image Capture API as Chrome on Android implements it, for the
++ * Android device profiles. A camera track's photo capabilities and settings
++ * are its AndroidCameraControls'; photos and grabbed frames are the track's
++ * frames, a photo scaled to the camera's JPEG size.
++ * https://w3c.github.io/mediacapture-image/#imagecaptureapi
+  */
+-
+-class ImageCapture final : public DOMEventTargetHelper {
++class ImageCapture final : public nsISupports, public nsWrapperCache {
+  public:
+-  NS_DECL_ISUPPORTS_INHERITED
+-  NS_DECL_CYCLE_COLLECTION_CLASS_INHERITED(ImageCapture, DOMEventTargetHelper)
+-
+-  IMPL_EVENT_HANDLER(photo)
+-  IMPL_EVENT_HANDLER(error)
+-
+-  // WebIDL members.
+-  void TakePhoto(ErrorResult& aResult);
+-
+-  // The MediaStreamTrack passed into the constructor.
+-  MediaStreamTrack* GetVideoStreamTrack() const;
+-
+-  // nsWrapperCache member
+-  JSObject* WrapObject(JSContext* aCx,
+-                       JS::Handle<JSObject*> aGivenProto) override {
+-    return ImageCapture_Binding::Wrap(aCx, this, aGivenProto);
+-  }
+-
+-  // ImageCapture class members
+-  nsIGlobalObject* GetParentObject() const { return GetRelevantGlobal(); }
++  NS_DECL_CYCLE_COLLECTING_ISUPPORTS
++  NS_DECL_CYCLE_COLLECTION_WRAPPERCACHE_CLASS(ImageCapture)
+ 
+   static already_AddRefed<ImageCapture> Constructor(const GlobalObject& aGlobal,
+                                                     MediaStreamTrack& aTrack,
+                                                     ErrorResult& aRv);
+ 
+-  ImageCapture(VideoStreamTrack* aTrack, nsPIDOMWindowInner* aOwnerWindow);
+-
+-  // Post a Blob event to script.
+-  nsresult PostBlobEvent(Blob* aBlob);
+-
+-  // Post an error event to script.
+-  // aErrorCode should be one of error codes defined in ImageCaptureError.h.
+-  // aReason is the nsresult which maps to a error string in
+-  // dom/base/domerr.msg.
+-  nsresult PostErrorEvent(uint16_t aErrorCode, nsresult aReason = NS_OK);
+-
+-  bool CheckPrincipal();
++  MediaStreamTrack* Track() const { return mTrack; }
++  already_AddRefed<Promise> GetPhotoCapabilities(ErrorResult& aRv);
++  already_AddRefed<Promise> GetPhotoSettings(ErrorResult& aRv);
++  already_AddRefed<Promise> TakePhoto(const PhotoSettings& aPhotoSettings,
++                                      ErrorResult& aRv);
++  already_AddRefed<Promise> GrabFrame(ErrorResult& aRv);
+ 
+- protected:
+-  virtual ~ImageCapture();
+-
+-  // Capture image by MediaEngine. If it's not support taking photo, this
+-  // function should return NS_ERROR_NOT_IMPLEMENTED.
+-  nsresult TakePhotoByMediaEngine();
+-
+-  RefPtr<VideoStreamTrack> mTrack;
++  nsIGlobalObject* GetParentObject() const { return mGlobal; }
++  JSObject* WrapObject(JSContext* aCx,
++                       JS::Handle<JSObject*> aGivenProto) override;
++
++ private:
++  ImageCapture(nsIGlobalObject* aGlobal, MediaStreamTrack* aTrack);
++  ~ImageCapture() = default;
++
++  // Blink rejects with an InvalidStateError on a track that is not live
++  // or not enabled.
++  bool RejectIfInactive(Promise* aPromise) const;
++  AndroidCameraControls* Controls() const;
++  gfx::IntSize TrackSize() const;
++
++  nsCOMPtr<nsIGlobalObject> mGlobal;
++  RefPtr<MediaStreamTrack> mTrack;
++  // Whether a page has had the photo capabilities, after which takePhoto()
++  // checks its settings against them, as Blink does.
++  bool mKnowsPhotoCapabilities = false;
+ };
+ 
+ }  // namespace dom
+diff --git a/dom/media/moz.build b/dom/media/moz.build
+index 2909f24d46..8059070eee 100644
+--- a/dom/media/moz.build
++++ b/dom/media/moz.build
+@@ -223,6 +223,7 @@ EXPORTS += [
+ ]
+ 
+ EXPORTS.mozilla += [
++    "AndroidCameraControls.h",
+     "MediaFragmentURIParser.h",
+     "MediaManager.h",
+     "UnderrunHandler.h",
+diff --git a/dom/media/systemservices/FakeVideoSource.cpp b/dom/media/systemservices/FakeVideoSource.cpp
+index 0a563bb1d4..16a5f16a1e 100644
+--- a/dom/media/systemservices/FakeVideoSource.cpp
++++ b/dom/media/systemservices/FakeVideoSource.cpp
+@@ -4,8 +4,12 @@
+ 
+ #include "FakeVideoSource.h"
+ 
++#include <algorithm>
++#include <cmath>
++
+ #include "ImageContainer.h"
+ #include "mozilla/CheckedInt.h"
++#include "mozilla/RandomNum.h"
+ #include "mozilla/SyncRunnable.h"
+ #include "mozilla/gfx/Tools.h"
+ 
+@@ -18,8 +22,9 @@ using namespace mozilla::gfx;
+ 
+ namespace mozilla {
+ 
+-FakeVideoSource::FakeVideoSource(nsISerialEventTarget* aTarget)
+-    : mTarget(aTarget) {}
++FakeVideoSource::FakeVideoSource(nsISerialEventTarget* aTarget,
++                                 bool aCameraLike)
++    : mTarget(aTarget), mCameraLike(aCameraLike) {}
+ 
+ FakeVideoSource::~FakeVideoSource() = default;
+ 
+@@ -86,6 +91,7 @@ int32_t FakeVideoSource::StartCapture(int32_t aWidth, int32_t aHeight,
+         mHeight = aHeight;
+         mFrame = std::move(frame);
+         mFrameData = std::move(data);
++        mSceneY.Clear();
+       })));
+ 
+   // Start timer for subsequent frames
+@@ -158,6 +164,18 @@ void FakeVideoSource::GenerateImage() {
+                            mHeight, CaptureStage::ImageType::I420);
+   }
+ 
++  if (mCameraLike) {
++    FillCameraLikeFrame();
++    RefPtr<layers::PlanarYCbCrImage> image =
++        mImageContainer->CreatePlanarYCbCrImage();
++    if (NS_FAILED(image->CopyData(*mFrameData))) {
++      return;
++    }
++    mGeneratedImageEvent.Notify(image, now);
++    mCaptureRecorder.Record(0);
++    return;
++  }
++
+   // Update the target color
+   if (mCr <= 16) {
+     if (mCb < 240) {
+@@ -208,4 +226,92 @@ void FakeVideoSource::GenerateImage() {
+   mCaptureRecorder.Record(0);
+ }
+ 
++void FakeVideoSource::FillCameraLikeFrame() {
++  const int32_t width = mWidth;
++  const int32_t height = mHeight;
++  const int32_t chromaWidth = (width + 1) / 2;
++  const int32_t chromaHeight = (height + 1) / 2;
++
++  if (mSceneY.IsEmpty()) {
++    // A room lit from one side, out of focus: a soft light patch, a
++    // brighter top, the lens's vignetting. Placed anew each capture.
++    const uint64_t seed = RandomUint64().valueOr(0x9e3779b97f4a7c15);
++    mNoiseState = uint32_t(seed) | 1;
++    const double lightX = 0.55 + double((seed >> 32) & 0xff) / 255.0 * 0.3;
++    const double lightY = 0.2 + double((seed >> 40) & 0xff) / 255.0 * 0.2;
++    const double base = 62 + double((seed >> 48) & 0x1f);
++    auto light = [&](double aX, double aY) {
++      const double dx = aX - lightX, dy = aY - lightY;
++      return std::exp(-(dx * dx + dy * dy) / 0.035);
++    };
++    auto vignette = [](double aX, double aY) {
++      const double dx = aX - 0.5, dy = aY - 0.5;
++      return 1.0 - 0.7 * (dx * dx + dy * dy);
++    };
++    if (!mSceneY.SetLength(size_t(width) * height, fallible) ||
++        !mSceneCb.SetLength(size_t(chromaWidth) * chromaHeight, fallible) ||
++        !mSceneCr.SetLength(size_t(chromaWidth) * chromaHeight, fallible)) {
++      mSceneY.Clear();
++      return;
++    }
++    for (int32_t y = 0; y < height; ++y) {
++      const double ny = (y + 0.5) / height;
++      for (int32_t x = 0; x < width; ++x) {
++        const double nx = (x + 0.5) / width;
++        const double luma =
++            (base + 30 * (1 - ny) + 70 * light(nx, ny)) * vignette(nx, ny);
++        mSceneY[size_t(y) * width + x] =
++            uint8_t(std::clamp(luma, 16.0, 235.0));
++      }
++    }
++    for (int32_t y = 0; y < chromaHeight; ++y) {
++      const double ny = (y + 0.5) / chromaHeight;
++      for (int32_t x = 0; x < chromaWidth; ++x) {
++        const double warm = 7 * light((x + 0.5) / chromaWidth, ny);
++        mSceneCb[size_t(y) * chromaWidth + x] = uint8_t(124 - warm);
++        mSceneCr[size_t(y) * chromaWidth + x] = uint8_t(133 + warm);
++      }
++    }
++  }
++
++  uint32_t state = mNoiseState;
++  auto next = [&state] {
++    state ^= state << 13;
++    state ^= state >> 17;
++    state ^= state << 5;
++    return state;
++  };
++  // Auto exposure settles slowly around its target.
++  const int drift =
++      int(std::lround(1.5 * std::sin(double(mFrameCount++) / 45.0)));
++  const int32_t yStride = mFrameData->mYStride;
++  const int32_t cStride = mFrameData->mCbCrStride;
++  for (int32_t y = 0; y < height; ++y) {
++    uint8_t* row = mFrameData->mYChannel + size_t(y) * yStride;
++    const uint8_t* scene = mSceneY.Elements() + size_t(y) * width;
++    for (int32_t x = 0; x < width; x += 2) {
++      const uint32_t r = next();
++      // Two triangular samples of +-4 from one draw.
++      const int n0 = int(r & 0xf) + int((r >> 4) & 0xf) - 15;
++      const int n1 = int((r >> 8) & 0xf) + int((r >> 12) & 0xf) - 15;
++      row[x] = uint8_t(std::clamp(scene[x] + drift + n0 / 2, 0, 255));
++      if (x + 1 < width) {
++        row[x + 1] =
++            uint8_t(std::clamp(scene[x + 1] + drift + n1 / 2, 0, 255));
++      }
++    }
++  }
++  for (int32_t y = 0; y < chromaHeight; ++y) {
++    uint8_t* cb = mFrameData->mCbChannel + size_t(y) * cStride;
++    uint8_t* cr = mFrameData->mCrChannel + size_t(y) * cStride;
++    const size_t offset = size_t(y) * chromaWidth;
++    for (int32_t x = 0; x < chromaWidth; ++x) {
++      const uint32_t r = next();
++      cb[x] = uint8_t(mSceneCb[offset + x] + int(r & 3) - 1);
++      cr[x] = uint8_t(mSceneCr[offset + x] + int((r >> 2) & 3) - 1);
++    }
++  }
++  mNoiseState = state;
++}
++
+ }  // namespace mozilla
+diff --git a/dom/media/systemservices/FakeVideoSource.h b/dom/media/systemservices/FakeVideoSource.h
+index f1a68d1ed6..bf2ae002e7 100644
+--- a/dom/media/systemservices/FakeVideoSource.h
++++ b/dom/media/systemservices/FakeVideoSource.h
+@@ -28,7 +28,11 @@ struct PlanarYCbCrData;
+ 
+ class FakeVideoSource {
+  public:
+-  explicit FakeVideoSource(nsISerialEventTarget* aTarget);
++  // aCameraLike: draw a dim, out-of-focus scene with sensor noise, as a
++  // phone camera shows, instead of Firefox's test pattern (Camoufox: the
++  // Android device profiles' cameras).
++  explicit FakeVideoSource(nsISerialEventTarget* aTarget,
++                           bool aCameraLike = false);
+ 
+   NS_INLINE_DECL_THREADSAFE_REFCOUNTING(FakeVideoSource)
+   int32_t StartCapture(int32_t aWidth, int32_t aHeight,
+@@ -48,6 +52,7 @@ class FakeVideoSource {
+    * Called by mTimer when it's time to generate a new image.
+    */
+   void GenerateImage() MOZ_REQUIRES(mTarget);
++  void FillCameraLikeFrame() MOZ_REQUIRES(mTarget);
+ 
+   Mutex mMutex{"FakeVideoSource::mMutex"};
+   nsCOMPtr<nsITimer> mTimer MOZ_GUARDED_BY(mMutex);
+@@ -63,6 +68,14 @@ class FakeVideoSource {
+   int32_t mHeight MOZ_GUARDED_BY(mTarget) = -1;
+   int mCb MOZ_GUARDED_BY(mTarget) = 16;
+   int mCr MOZ_GUARDED_BY(mTarget) = 16;
++
++  const bool mCameraLike;
++  // The scene's luma and chroma before noise, and the noise generator.
++  nsTArray<uint8_t> mSceneY MOZ_GUARDED_BY(mTarget);
++  nsTArray<uint8_t> mSceneCb MOZ_GUARDED_BY(mTarget);
++  nsTArray<uint8_t> mSceneCr MOZ_GUARDED_BY(mTarget);
++  uint32_t mNoiseState MOZ_GUARDED_BY(mTarget) = 0;
++  uint32_t mFrameCount MOZ_GUARDED_BY(mTarget) = 0;
+ };
+ }  // namespace mozilla
+ 
+diff --git a/dom/media/webrtc/MediaEngineFake.cpp b/dom/media/webrtc/MediaEngineFake.cpp
+index 6b96366275..d9ac38d2c5 100644
+--- a/dom/media/webrtc/MediaEngineFake.cpp
++++ b/dom/media/webrtc/MediaEngineFake.cpp
+@@ -277,7 +277,7 @@ nsresult MediaEngineFakeVideoSource::Allocate(
+   mOpts.mFPS = std::clamp(mOpts.mFPS, 0, MediaEnginePrefs::DEFAULT_VIDEO_FPS);
+ 
+   nsCOMPtr<nsISerialEventTarget> target = GetCurrentSerialEventTarget();
+-  mCapturer = MakeRefPtr<FakeVideoSource>(target);
++  mCapturer = MakeRefPtr<FakeVideoSource>(target, mFacingMode.isSome());
+   mGeneratedImageListener = mCapturer->GeneratedImageEvent().Connect(
+       target, this, &MediaEngineFakeVideoSource::OnGeneratedImage);
+ 
+diff --git a/dom/webidl/ImageCapture.webidl b/dom/webidl/ImageCapture.webidl
+index 5a4ce53a7e..ec535987d3 100644
+--- a/dom/webidl/ImageCapture.webidl
++++ b/dom/webidl/ImageCapture.webidl
+@@ -9,24 +9,50 @@
+  * W3C liability, trademark and document use rules apply.
+  */
+ 
+-[Pref="dom.imagecapture.enabled",
+- Exposed=Window]
+-interface ImageCapture : EventTarget {
+-  [Throws]
+-  constructor(MediaStreamTrack track);
++// Camoufox: the Image Capture API as Chrome ships it, on the Android device
++// profiles only (Chrome on Android has it; Firefox does not). The controls
++// it reports and sets are those of the profile's cameras: see
++// AndroidCameraControls in dom/media/AndroidMediaDevices.h.
++// https://w3c.github.io/mediacapture-image/#imagecaptureapi
+ 
+-  // readonly attribute PhotoSettingsOptions photoSettingsOptions;
+-  [BinaryName="GetVideoStreamTrack"]
+-  readonly attribute MediaStreamTrack videoStreamTrack;
+-  attribute EventHandler onphoto;
+-  attribute EventHandler onerror;
+-  // attribute EventHandler onphotosettingschange;
+-  // attribute EventHandler onframegrab;
++enum RedEyeReduction {
++    "never",
++    "always",
++    "controllable",
++};
++
++enum FillLightMode {
++    "off",
++    "auto",
++    "flash",
++};
++
++dictionary PhotoCapabilities {
++    RedEyeReduction         redEyeReduction;
++    MediaSettingsRange      imageHeight;
++    MediaSettingsRange      imageWidth;
++    sequence<FillLightMode> fillLightMode;
++};
++
++dictionary PhotoSettings {
++    FillLightMode fillLightMode;
++    double        imageHeight;
++    double        imageWidth;
++    boolean       redEyeReduction;
++};
++
++[Exposed=Window, SecureContext, Func="mozilla::dom::AndroidDevice::Exposed"]
++interface ImageCapture {
++    [Throws]
++    constructor(MediaStreamTrack track);
++    readonly attribute MediaStreamTrack track;
+ 
+-  // [Throws]
+-  // undefined setOptions (PhotoSettings? photoSettings);
+-  [Throws]
+-  undefined takePhoto();
+-  // [Throws]
+-  // undefined getFrame();
++    [NewObject]
++    Promise<PhotoCapabilities> getPhotoCapabilities();
++    [NewObject]
++    Promise<PhotoSettings> getPhotoSettings();
++    [NewObject]
++    Promise<Blob> takePhoto(optional PhotoSettings photoSettings = {});
++    [NewObject]
++    Promise<ImageBitmap> grabFrame();
+ };
+diff --git a/dom/webidl/MediaStreamTrack.webidl b/dom/webidl/MediaStreamTrack.webidl
+index ed0b06e326..806b46444e 100644
+--- a/dom/webidl/MediaStreamTrack.webidl
++++ b/dom/webidl/MediaStreamTrack.webidl
+@@ -66,6 +66,20 @@ typedef (double or ConstrainDoubleRange) ConstrainDouble;
+ typedef (boolean or ConstrainBooleanParameters) ConstrainBoolean;
+ typedef (DOMString or sequence<DOMString> or ConstrainDOMStringParameters) ConstrainDOMString;
+ 
++// https://w3c.github.io/mediacapture-image/#point2d-section
++dictionary Point2D {
++    double x = 0.0;
++    double y = 0.0;
++};
++
++// https://w3c.github.io/mediacapture-image/#mediatrackconstraintset-section
++dictionary ConstrainPoint2DParameters {
++    sequence<Point2D> exact;
++    sequence<Point2D> ideal;
++};
++
++typedef (sequence<Point2D> or ConstrainPoint2DParameters) ConstrainPoint2D;
++
+ // Note: When adding new constraints, remember to update the SelectSettings()
+ // function in MediaManager.cpp to make OverconstrainedError's constraint work!
+ 
+@@ -88,6 +102,28 @@ dictionary MediaTrackConstraintSet {
+     ConstrainBoolean noiseSuppression;
+     ConstrainBoolean autoGainControl;
+     ConstrainLong channelCount;
++
++    // Camoufox: the Image Capture constraints, as Chrome takes them. Only the
++    // Android device profiles act on them (AndroidCameraControls); elsewhere
++    // they are dropped from getConstraints(), so Firefox's shape is kept.
++    // https://w3c.github.io/mediacapture-image/#mediatrackconstraintset-section
++    ConstrainDOMString whiteBalanceMode;
++    ConstrainDOMString exposureMode;
++    ConstrainDOMString focusMode;
++    ConstrainPoint2D   pointsOfInterest;
++    ConstrainDouble    exposureCompensation;
++    ConstrainDouble    exposureTime;
++    ConstrainDouble    colorTemperature;
++    ConstrainDouble    iso;
++    ConstrainDouble    brightness;
++    ConstrainDouble    contrast;
++    ConstrainDouble    saturation;
++    ConstrainDouble    sharpness;
++    ConstrainDouble    focusDistance;
++    (boolean or ConstrainDouble) pan;
++    (boolean or ConstrainDouble) tilt;
++    (boolean or ConstrainDouble) zoom;
++    ConstrainBoolean   torch;
+ };
+ 
+ [GenerateToJSON]
+diff --git a/dom/webidl/MediaTrackCapabilities.webidl b/dom/webidl/MediaTrackCapabilities.webidl
+index 70d333471c..67a7cbc82d 100644
+--- a/dom/webidl/MediaTrackCapabilities.webidl
++++ b/dom/webidl/MediaTrackCapabilities.webidl
+@@ -50,8 +50,14 @@ dictionary MediaTrackCapabilities {
+   // sequence<boolean> backgroundBlur;
+ 
+   // https://w3c.github.io/mediacapture-image/#mediatrackcapabilities-section
++  sequence<DOMString> whiteBalanceMode;
+   sequence<DOMString> exposureMode;
+   sequence<DOMString> focusMode;
++  MediaSettingsRange exposureCompensation;
++  MediaSettingsRange exposureTime;
++  MediaSettingsRange colorTemperature;
++  MediaSettingsRange iso;
++  MediaSettingsRange focusDistance;
+   MediaSettingsRange zoom;
+   // Chrome's type; the specification has since moved to sequence<boolean>.
+   boolean torch;
+diff --git a/dom/webidl/MediaTrackSettings.webidl b/dom/webidl/MediaTrackSettings.webidl
+index 39416cd512..0149c3e33a 100644
+--- a/dom/webidl/MediaTrackSettings.webidl
++++ b/dom/webidl/MediaTrackSettings.webidl
+@@ -9,6 +9,10 @@
+ dictionary MediaTrackSettings {
+     long      width;
+     long      height;
++    // Camoufox: aspectRatio and the Image Capture members below are only
++    // filled in on the Android device profiles, for a camera track, as Chrome
++    // reports them (AndroidCameraControls). Unset members are not reported.
++    double    aspectRatio;
+     double    frameRate;
+     DOMString facingMode;
+     DOMString resizeMode;
+@@ -19,6 +23,19 @@ dictionary MediaTrackSettings {
+     DOMString deviceId;
+     DOMString groupId;
+ 
++    // https://w3c.github.io/mediacapture-image/#mediatracksettings-section
++    DOMString         whiteBalanceMode;
++    DOMString         exposureMode;
++    DOMString         focusMode;
++    sequence<Point2D> pointsOfInterest;
++    double            exposureCompensation;
++    double            exposureTime;
++    double            colorTemperature;
++    double            iso;
++    double            focusDistance;
++    double            zoom;
++    boolean           torch;
++
+     // Mozilla-specific extensions:
+ 
+     // http://fluffy.github.io/w3c-screen-share/#screen-based-video-constraints
+diff --git a/dom/webidl/MediaTrackSupportedConstraints.webidl b/dom/webidl/MediaTrackSupportedConstraints.webidl
+index d115a64957..8a030392e4 100644
+--- a/dom/webidl/MediaTrackSupportedConstraints.webidl
++++ b/dom/webidl/MediaTrackSupportedConstraints.webidl
+@@ -6,38 +6,67 @@
+  * http://dev.w3.org/2011/webrtc/editor/getusermedia.html
+  */
+ 
++// Camoufox: no member has a default, so that the set reported is chosen at
++// run time -- Firefox's own, or Chrome's on the Android device profiles (see
++// MediaDevices::GetSupportedConstraints). Members are listed in the order of
++// Chrome's IDL; the returned object is ordered by name either way.
+ dictionary MediaTrackSupportedConstraints {
+-    boolean width = true;
+-    boolean height = true;
+-    boolean aspectRatio;        // to be supported
+-    boolean frameRate = true;
+-    boolean facingMode = true;
+-    boolean resizeMode;         // to be enabled by default
+-    boolean volume;             // to be supported
+-    boolean sampleRate;         // to be supported
+-    boolean sampleSize;         // to be supported
+-    boolean echoCancellation = true;
+-    boolean noiseSuppression = true;
+-    boolean autoGainControl = true;
+-    boolean latency;            // to be supported
+-    boolean channelCount = true;
+-    boolean deviceId = true;
+-    boolean groupId = true;
++    boolean width;
++    boolean height;
++    boolean aspectRatio;
++    boolean frameRate;
++    boolean facingMode;
++    boolean resizeMode;
++    boolean sampleRate;
++    boolean sampleSize;
++    boolean echoCancellation;
++    boolean autoGainControl;
++    boolean noiseSuppression;
++    boolean voiceIsolation;
++    boolean latency;
++    boolean channelCount;
++    boolean deviceId;
++    boolean groupId;
++    boolean volume;
++
++    // https://w3c.github.io/mediacapture-image/#mediatracksupportedconstraints-section
++    boolean whiteBalanceMode;
++    boolean exposureMode;
++    boolean focusMode;
++    boolean pointsOfInterest;
++    boolean exposureCompensation;
++    boolean exposureTime;
++    boolean colorTemperature;
++    boolean iso;
++    boolean brightness;
++    boolean contrast;
++    boolean pan;
++    boolean saturation;
++    boolean sharpness;
++    boolean focusDistance;
++    boolean tilt;
++    boolean zoom;
++    boolean torch;
++
++    // https://w3c.github.io/mediacapture-screen-share/#extensions-to-mediatracksupportedconstraints
++    boolean displaySurface;
++    boolean suppressLocalAudioPlayback;
++    boolean restrictOwnAudio;
+ 
+     // Mozilla-specific extensions:
+ 
+     // http://fluffy.github.io/w3c-screen-share/#screen-based-video-constraints
+     // OBE by http://w3c.github.io/mediacapture-screen-share
+ 
+-    boolean mediaSource = true;
++    boolean mediaSource;
+ 
+     // Experimental https://bugzilla.mozilla.org/show_bug.cgi?id=1131568#c3
+     //              https://bugzilla.mozilla.org/show_bug.cgi?id=1193075
+ 
+-    boolean browserWindow = true;
+-    boolean scrollWithPage = true;
+-    boolean viewportOffsetX = true;
+-    boolean viewportOffsetY = true;
+-    boolean viewportWidth = true;
+-    boolean viewportHeight = true;
++    boolean browserWindow;
++    boolean scrollWithPage;
++    boolean viewportOffsetX;
++    boolean viewportOffsetY;
++    boolean viewportWidth;
++    boolean viewportHeight;
+ };

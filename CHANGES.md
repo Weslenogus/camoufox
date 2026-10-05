@@ -652,6 +652,51 @@ keys. OfflineAudioContext keeps the rate it is given.
 - `settings/properties.json`: L172-173
 - `tests/patches/android-media-timing.py`: new file, L1-59
 
+## Task 29 - Camera2 controls and Image Capture
+
+The phone's cameras take Chrome on Android's Image Capture surface, ported from
+Blink's `ImageCapture` and Chrome's `VideoCaptureCamera2` (155.0.8059.16):
+`getSupportedConstraints()` reports Chrome's 36 properties instead of Firefox's
+(no `mediaSource` / `browserWindow` / `scrollWithPage` / `viewport*`); a camera
+track's capabilities and settings carry white balance, exposure and focus modes,
+exposure compensation and time, colour temperature, ISO, focus distance, zoom
+and torch, with Chrome's float rounding, plus `aspectRatio`; `applyConstraints()`
+checks and applies them by Blink's rules (zoom snaps to a whole-pixel sensor
+crop, compensation to the 1/6 EV step, mixing with other constraints is an
+OverconstrainedError); `ImageCapture` exists with Chrome's shape -- photo
+capabilities and settings, `takePhoto()` as a JPEG at the camera's JPEG size,
+`grabFrame()` -- in place of Firefox's pref-gated EventTarget version. Capture
+frames are a noisy, unevenly lit scene instead of Firefox's test pattern.
+Elsewhere Firefox's shapes are kept: its own supported constraints, no
+ImageCapture, and no Image Capture members in `getConstraints()`. ISO and
+exposure-time limits are representative Pixel values, not a Pixel 10 dump.
+
+- `patches/android/android-29-camera2-image-capture.patch` (patch; lines in the patched source tree):
+  - `dom/media/AndroidCameraControls.h`: L1-142
+  - `dom/media/AndroidMediaDevices.cpp`: L7-8, L12, L16-17, L25-26, L30-36, L43, L47-60, L63-64, L97-117, L120-122, L135, L148-155, L162-193, L204, L250-299, L349, L365-366, L386, L392-396, L419-1472
+  - `dom/media/MediaDevices.cpp`: L20, L50-51, L54-120
+  - `dom/media/MediaManager.cpp`: L874-878, L1183-1197, L1336-1337, L1845-1847
+  - `dom/media/MediaManager.h`: L12, L172-174, L199-200
+  - `dom/media/MediaStreamTrack.cpp`: L12, L14-16, L325-327, L365-401
+  - `dom/media/MediaStreamTrack.h`: L24-25, L210-213
+  - `dom/media/imagecapture/CaptureTask.cpp`: L1-2, L9, L23, L30-32, L39-41, L44, L46-49, L53-54, L83-84, L88-89, L92-96
+  - `dom/media/imagecapture/CaptureTask.h`: L1-2, L10-11, L22-25, L27-29, L35-40, L52-54, L56-58, L62, L65-66
+  - `dom/media/imagecapture/ImageCapture.cpp`: L1-2, L10-12, L14-37, L39-58, L60-91, L94, L96-98, L100-102, L104-105, L107-109, L112, L115-116, L121-122, L125, L128-131, L133-134, L136-138, L140-146, L148-151, L153-164, L167-170, L172-183, L186-190, L192-214, L217-220, L222-241, L244
+  - `dom/media/imagecapture/ImageCapture.h`: L1-2, L10, L12-17, L21-22, L27, L30-34, L36, L38-39, L45-50, L52-70
+  - `dom/media/moz.build`: L226
+  - `dom/media/systemservices/FakeVideoSource.cpp`: L7-9, L12, L25-27, L94, L167-178, L229-316
+  - `dom/media/systemservices/FakeVideoSource.h`: L31-35, L55, L71-78
+  - `dom/media/webrtc/MediaEngineFake.cpp`: L280
+  - `dom/webidl/ImageCapture.webidl`: L12-16, L18-48, L50-57
+  - `dom/webidl/MediaStreamTrack.webidl`: L69-82, L105-126
+  - `dom/webidl/MediaTrackCapabilities.webidl`: L53, L56-60
+  - `dom/webidl/MediaTrackSettings.webidl`: L12-15, L26-38
+  - `dom/webidl/MediaTrackSupportedConstraints.webidl`: L9-12, L14-54, L61, L66-71
+- `additions/camoucfg/DeviceProfiles.cpp`: L224-251, L258-277, L283, L286-305
+- `settings/camoucfg.jvv`: L364-382
+- `tests/patches/android-camera2.py`: new file, L1-295
+- `tests/patches/android-media-devices.py`: L16-17
+
 ## Fixes after the first build of all tasks together
 
 Tasks 0-28 were first compiled and tested together after they were merged. The fixes are follow-up commits, one per task (see the git log). Patches: each task's section above already points into the current patch. Other files, with the lines those fixes changed, as the files were after the last fix (73be997):
